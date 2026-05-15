@@ -1,0 +1,30 @@
+
+images/
+augmented_directory/
+*_augmented/
+dst_directory/
+dataset.zip
+
+# Models / artifacts
+*.h5
+*.keras
+*.pt
+*.pth
+*.onnx
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Claude Code local config
+.claude/settings.local.json

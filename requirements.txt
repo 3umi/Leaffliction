@@ -1,0 +1,8 @@
+numpy
+matplotlib
+Pillow
+opencv-python
+plantcv
+scikit-learn
+tensorflow
+flake8
