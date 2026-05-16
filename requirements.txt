@@ -6,3 +6,4 @@ plantcv
 scikit-learn
 tensorflow
 flake8
+pytest

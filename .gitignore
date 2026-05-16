@@ -23,7 +23,6 @@ venv/
 env/
 
 # Tests
-tests/
 .pytest_cache/
 
 # Editors / OS
