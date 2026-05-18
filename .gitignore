@@ -1,4 +1,5 @@
-
+*.md
+*.pdf
 images/
 augmented_directory/
 *_augmented/
@@ -21,6 +22,9 @@ __pycache__/
 venv/
 env/
 
+# Tests
+.pytest_cache/
+
 # Editors / OS
 .DS_Store
 .vscode/
@@ -28,3 +32,6 @@ env/
 
 # Claude Code local config
 .claude/settings.local.json
+
+# Distribution.py savefig fallback artifacts
+*_distribution.png
