@@ -38,12 +38,21 @@ AUGMENTATIONS = {
 AUGMENTATION_NAMES = list(AUGMENTATIONS.keys())
 
 
-def apply(name: str, image: np.ndarray) -> np.ndarray:
+def apply(
+    name: str,
+    image: np.ndarray,
+    seed: int | None = None,
+) -> np.ndarray:
     """Apply named augmentation to an RGB numpy image.
 
     Args:
         name: one of AUGMENTATION_NAMES.
         image: HxWx3 numpy array in RGB order, uint8.
+        seed: if provided, reseeds the transform's per-instance RNGs so
+            the output is deterministic. Albumentations 2.x transforms
+            each own a `numpy.random.default_rng()` that is *not*
+            affected by `np.random.seed()`, so callers must reseed here
+            to get reproducible bytes.
 
     Returns:
         Augmented HxWx3 numpy array in RGB order.
@@ -56,4 +65,7 @@ def apply(name: str, image: np.ndarray) -> np.ndarray:
             f"Unknown augmentation {name!r}; "
             f"expected one of {AUGMENTATION_NAMES}"
         )
-    return AUGMENTATIONS[name](image=image)["image"]
+    transform = AUGMENTATIONS[name]
+    if seed is not None:
+        transform.set_random_seed(seed)
+    return transform(image=image)["image"]

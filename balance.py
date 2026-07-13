@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 import augmentations
-from Distribution import discover_classes, group_by_plant
+from Distribution import _safe_scandir, discover_classes, group_by_plant
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
@@ -47,13 +47,15 @@ def _class_dir(root: str, components: Tuple[str, ...]) -> str:
 def _list_sources(class_path: str) -> List[str]:
     """List image files directly in a class directory."""
     out: List[str] = []
-    for entry in sorted(os.listdir(class_path)):
-        if entry.startswith("."):
+    for entry in _safe_scandir(class_path):
+        if entry.name.startswith("."):
             continue
-        full = os.path.join(class_path, entry)
-        if os.path.isfile(full) and _is_image(entry):
-            out.append(full)
-    return out
+        try:
+            if entry.is_file(follow_symlinks=False) and _is_image(entry.name):
+                out.append(entry.path)
+        except OSError:
+            continue
+    return sorted(out)
 
 
 def _load_rgb(path: str) -> np.ndarray:
@@ -86,13 +88,14 @@ def _compute_targets(
 ) -> Dict[str, int]:
     """Compute per-class target count.
 
-    If override > 0, every class targets that count. Otherwise the
-    target for a class is the max count within its plant group.
+    If `override` is a positive int, every class targets that count.
+    Otherwise (None) the target for a class is the max count within
+    its plant group.
     """
     targets: Dict[str, int] = {}
     for plant, class_counts in groups.items():
         plant_max = max(class_counts.values())
-        target = override if override > 0 else plant_max
+        target = override if override else plant_max
         for label in class_counts:
             targets[label] = target
     return targets
@@ -137,16 +140,26 @@ def _generate_for_class(
     for _ in range(needed):
         src = ""
         aug_name = ""
+        found = False
         for _attempt in range(MAX_REROLLS):
             src = _weighted_choice(sources, used, rng)
             aug_name = rng.choice(augmentations.AUGMENTATION_NAMES)
-            key = (src, aug_name)
-            if pair.get(key, 0) < MAX_PAIR_COUNT:
+            if pair.get((src, aug_name), 0) < MAX_PAIR_COUNT:
+                found = True
                 break
+        if not found:
+            print(
+                f"Warning: could not find a fresh (source, augmentation) "
+                f"pair for {label} after {MAX_REROLLS} rerolls; skipping.",
+                file=sys.stderr,
+            )
+            failures += 1
+            continue
 
         try:
             image = _load_rgb(src)
-            out_img = augmentations.apply(aug_name, image)
+            aug_seed = rng.getrandbits(63)
+            out_img = augmentations.apply(aug_name, image, seed=aug_seed)
         except Exception as exc:  # noqa: BLE001
             print(
                 f"Warning: failed to augment {src} with "
@@ -159,6 +172,7 @@ def _generate_for_class(
         base = os.path.basename(src)
         stem, ext = os.path.splitext(base)
         idx = technique_idx.get(aug_name, 0) + 1
+        technique_idx[aug_name] = idx
         out_name = f"{stem}_{aug_name}_{idx:04d}{ext}"
         out_path = os.path.join(dest_dir, out_name)
         try:
@@ -171,7 +185,6 @@ def _generate_for_class(
             failures += 1
             continue
 
-        technique_idx[aug_name] = idx
         used[src] = used.get(src, 0) + 1
         pair[(src, aug_name)] = pair.get((src, aug_name), 0) + 1
         successes += 1
@@ -211,7 +224,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     parser.add_argument(
         "--target",
         type=int,
-        default=0,
+        default=None,
         help=(
             "Override per-class target count. Defaults to the per-plant "
             "max."
@@ -242,7 +255,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
             file=sys.stderr,
         )
         raise SystemExit(1)
-    if args.target < 0:
+    if args.target is not None and args.target <= 0:
         print("Error: --target must be a positive integer.", file=sys.stderr)
         raise SystemExit(1)
     return args
@@ -290,7 +303,6 @@ def main(argv: List[str]) -> int:
 
     seed = args.seed if args.seed is not None else int(time.time())
     rng = random.Random(seed)
-    np.random.seed(seed & 0xFFFFFFFF)
 
     label_to_components: Dict[str, Tuple[str, ...]] = {
         _label_of(c, args.directory): c for c in classes
