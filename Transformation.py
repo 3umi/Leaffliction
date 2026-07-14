@@ -47,9 +47,11 @@ def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     ]
     fig, ax = plt.subplots(figsize=(8, 4))
     masked = mask > 0
+    total = max(int(masked.sum()), 1)
+    weights_template = np.full(total, 100.0 / total)
     for (name, ch), color in zip(channels, colors):
         pixels = ch[masked].flatten()
-        ax.hist(pixels, bins=256, range=(0, 256), density=True,
+        ax.hist(pixels, bins=256, range=(0, 256), weights=weights_template,
                 histtype="step", label=name, color=color, linewidth=1)
     ax.set_xlabel("Pixel intensity")
     ax.set_ylabel("Proportion of pixels (%)")
@@ -65,6 +67,83 @@ def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
+# Mask post-processing
+# ---------------------------------------------------------------------------
+
+def _segment_leaf(img: np.ndarray) -> np.ndarray:
+    """Segment the leaf from the background.
+
+    Computes three candidate masks and picks the largest plausible one:
+      * LAB-a/dark:   isolates green leaves (originals + most cases)
+      * LAB-b/light:  isolates yellow/brown leaves (Color augmentation)
+      * LAB-L<253:    isolates any non-pure-white pixel (Lighting
+                      augmentation bleaches the leaf near L=255)
+
+    L<253 gives 0% on normal images (backgrounds aren't overexposed) but
+    dominates when the Lighting augmentation blows out the highlights,
+    which fragments the LAB triangle-threshold masks into swiss cheese.
+    Picking the largest non-degenerate candidate handles all three cases
+    without any per-augmentation branching.
+    """
+    candidates = []
+    for channel, otype in (("a", "dark"), ("b", "light")):
+        gray = pcv.rgb2gray_lab(rgb_img=img, channel=channel)
+        gray = pcv.gaussian_blur(img=gray, ksize=(5, 5), sigma_x=0)
+        m = pcv.threshold.triangle(gray_img=gray, object_type=otype)
+        m = pcv.fill(bin_img=m, size=200)
+        candidates.append(_isolate_leaf(m))
+
+    gray = pcv.rgb2gray_lab(rgb_img=img, channel="l")
+    gray = pcv.gaussian_blur(img=gray, ksize=(3, 3), sigma_x=0)
+    m = pcv.threshold.binary(gray_img=gray, threshold=253, object_type="dark")
+    m = pcv.fill(bin_img=m, size=100)
+    candidates.append(_isolate_leaf(m))
+
+    plausible = [c for c in candidates if 0.05 <= (c > 0).mean() <= 0.90]
+    if plausible:
+        return max(plausible, key=lambda c: (c > 0).sum())
+    return candidates[0]
+
+
+def _close_mask(binary: np.ndarray) -> np.ndarray:
+    """Fill small internal holes with morphological closing.
+
+    Overexposed leaves (Lighting augmentation) produce swiss-cheese masks
+    where veins and highlights get excluded, which fragments the ROI /
+    analyze / pseudolandmark panels. A small elliptical close bridges
+    those pixels while leaving larger disease-spot holes intact.
+    """
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
+
+def _isolate_leaf(binary: np.ndarray) -> np.ndarray:
+    """Force the binary mask to represent the leaf only.
+
+    Triangle threshold can flip polarity on unusual color distributions,
+    producing a "picture frame" mask that hugs every border and leaves the
+    leaf as a hole. We invert only when the foreground clearly wraps the
+    frame — high border density AND high overall area — then keep only the
+    largest connected component so stray noise blobs don't leak in.
+    """
+    border = np.concatenate([
+        binary[0, :], binary[-1, :], binary[:, 0], binary[:, -1]
+    ])
+    border_density = (border > 0).mean()
+    fg_density = (binary > 0).mean()
+    # Only invert if the mask looks like it captured the background:
+    # borders are almost fully foreground AND the area is majority foreground.
+    if border_density > 0.9 and fg_density > 0.5:
+        binary = cv2.bitwise_not(binary)
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(binary, 8)
+    if n <= 1:
+        return binary
+    largest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+    return np.where(labels == largest, 255, 0).astype(np.uint8)
+
+
+# ---------------------------------------------------------------------------
 # PlantCV pipeline
 # ---------------------------------------------------------------------------
 
@@ -76,17 +155,13 @@ def _pipeline(img: np.ndarray) -> dict:
     pcv.params.debug = None
     pcv.params.verbose = False
 
-    # 1. Gaussian blur — HSV-s for display, LAB-b for segmentation
-    gray_hsv = pcv.rgb2gray_hsv(rgb_img=img, channel="s")
-    blurred = pcv.gaussian_blur(img=gray_hsv, ksize=(5, 5), sigma_x=0)
-    gray_lab = pcv.rgb2gray_lab(rgb_img=img, channel="b")
-    blurred_lab = pcv.gaussian_blur(img=gray_lab, ksize=(5, 5), sigma_x=0)
-
-    # 2. Triangle threshold on LAB-b → clean mask
-    binary = pcv.threshold.triangle(
-        gray_img=blurred_lab, object_type="light"
-    )
-    binary = pcv.fill(bin_img=binary, size=200)
+    # 1. Segment the leaf — tries LAB-a first, falls back to LAB-b if the
+    #    Color augmentation shifted the leaf away from green, then closes
+    #    small internal holes from vein highlights.
+    binary = _close_mask(_segment_leaf(img))
+    # "Gaussian blur" panel: binary mask (matches subject figure IV.2 —
+    # a black background with the leaf as a bright silhouette).
+    blurred = binary
 
     # 3. Apply mask to original
     masked = pcv.apply_mask(img=img, mask=binary, mask_color="white")
@@ -194,9 +269,16 @@ def _show(results: dict) -> None:
         plt.show()
 
 
-def _save(results: dict, stem: str, dest_dir: str) -> None:
-    """Save each panel as <dest_dir>/<stem>_<label>.png."""
+def _save(results: dict, stem: str, dest_dir: str,
+          include: set = None) -> None:
+    """Save each panel as <dest_dir>/<stem>_<label>.png.
+
+    If `include` is given, only save panels whose title is in the set;
+    otherwise save every panel.
+    """
     for key in results:
+        if include is not None and key not in include:
+            continue
         img = results[key]
         label = key.lower().replace(" ", "_")
         out_path = os.path.join(dest_dir, f"{stem}_{label}.png")
@@ -208,15 +290,6 @@ def _save(results: dict, stem: str, dest_dir: str) -> None:
             print(f"Warning: failed to write {out_path}", file=sys.stderr)
         else:
             print(f"Saved {out_path}")
-
-    hist_fig = results.get("_hist_fig")
-    if hist_fig is not None:
-        hist_path = os.path.join(dest_dir, f"{stem}_color_histogram.png")
-        try:
-            hist_fig.save(hist_path)
-            print(f"Saved {hist_path}")
-        except Exception as exc:  # noqa: BLE001
-            print(f"Warning: could not save histogram: {exc}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +310,18 @@ def run_single(image_path: str) -> int:
     return 0
 
 
-def run_batch(src_dir: str, dst_dir: str) -> int:
+FLAG_TO_KEY = {
+    "blur": "Gaussian blur",
+    "mask": "Mask",
+    "roi": "Roi objects",
+    "analyze": "Analyze object",
+    "landmarks": "Pseudolandmarks",
+    "hist": "Color histogram",
+}
+
+
+def run_batch(src_dir: str, dst_dir: str,
+              include: set = None) -> int:
     if not os.path.isdir(src_dir):
         print(f"Error: source is not a directory: {src_dir}", file=sys.stderr)
         return 1
@@ -257,7 +341,7 @@ def run_batch(src_dir: str, dst_dir: str) -> int:
         try:
             img, _, _ = pcv.readimage(filename=path)
             results = _pipeline(img)
-            _save(results, stem, dst_dir)
+            _save(results, stem, dst_dir, include=include)
         except Exception as exc:  # noqa: BLE001
             print(f"Warning: failed to process {path}: {exc}", file=sys.stderr)
             errors += 1
@@ -283,9 +367,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     parser.add_argument("image", nargs="?", help="Single image path.")
     parser.add_argument("-src", dest="src", help="Source directory (batch).")
     parser.add_argument("-dst", dest="dst", help="Dest directory (batch).")
-    parser.add_argument(
-        "-mask", action="store_true", help="(batch) Include mask outputs."
-    )
+    for flag, key in FLAG_TO_KEY.items():
+        parser.add_argument(
+            f"-{flag}", action="store_true",
+            help=f"(batch) Save the {key!r} panel.",
+        )
     args = parser.parse_args(argv[1:])
 
     if args.image and (args.src or args.dst):
@@ -306,7 +392,11 @@ def main(argv: List[str]) -> int:
 
     if args.image:
         return run_single(args.image)
-    return run_batch(args.src, args.dst)
+    # Panel filter: if any -blur/-mask/... flag is set, save only those +
+    # the Original. Otherwise save every panel (backward-compatible default).
+    selected = {FLAG_TO_KEY[f] for f in FLAG_TO_KEY if getattr(args, f)}
+    include = ({"Original"} | selected) if selected else None
+    return run_batch(args.src, args.dst, include=include)
 
 
 if __name__ == "__main__":
