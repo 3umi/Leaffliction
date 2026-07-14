@@ -13,10 +13,16 @@ import sys
 from typing import List, Tuple
 
 import cv2
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
 import augmentations
+
+
+_NON_INTERACTIVE_BACKENDS = {
+    "agg", "cairo", "pdf", "pgf", "ps", "svg", "template",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +48,12 @@ def _display(original: np.ndarray,
         ax.set_title(label)
         ax.axis("off")
     fig.tight_layout()
-    plt.show()
+    if matplotlib.get_backend().lower() in _NON_INTERACTIVE_BACKENDS:
+        out = "augmentation_result.png"
+        fig.savefig(out, bbox_inches="tight")
+        print(f"No display available; saved grid to {out}")
+    else:
+        plt.show()
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +76,9 @@ def run(image_path: str) -> int:
         augmented = augmentations.apply(label, original)
         out_path = _output_path(image_path, label)
         bgr = cv2.cvtColor(augmented, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(out_path, bgr)
+        if not cv2.imwrite(out_path, bgr):
+            print(f"Error: failed to write {out_path}", file=sys.stderr)
+            return 1
         print(f"Saved {out_path}")
         results.append((label, augmented))
 
@@ -78,9 +91,12 @@ def run(image_path: str) -> int:
 # ---------------------------------------------------------------------------
 
 def main(argv: list) -> int:
-    if len(argv) != 2 or argv[1] in ("-h", "--help"):
+    if argv[1:] and argv[1] in ("-h", "--help"):
         print(f"Usage: {argv[0]} <image_path>")
-        return 0 if len(argv) > 1 else 1
+        return 0
+    if len(argv) != 2:
+        print(f"Usage: {argv[0]} <image_path>", file=sys.stderr)
+        return 2
     return run(argv[1])
 
 
@@ -88,4 +104,4 @@ if __name__ == "__main__":
     try:
         sys.exit(main(sys.argv))
     except KeyboardInterrupt:
-        sys.exit(0)
+        sys.exit(130)
