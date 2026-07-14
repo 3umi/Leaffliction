@@ -13,6 +13,8 @@ import os
 import sys
 from typing import List
 
+import io
+
 import cv2
 import matplotlib
 import matplotlib.pyplot as plt
@@ -20,6 +22,46 @@ import numpy as np
 from plantcv import plantcv as pcv
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
+
+
+# ---------------------------------------------------------------------------
+# Color histogram helper
+# ---------------------------------------------------------------------------
+
+def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Compute a 9-channel color histogram and return it as an RGB array."""
+    channels = [
+        ("red",           img[:, :, 0]),
+        ("green",         img[:, :, 1]),
+        ("blue",          img[:, :, 2]),
+        ("hue",           cv2.cvtColor(img, cv2.COLOR_RGB2HSV)[:, :, 0]),
+        ("saturation",    cv2.cvtColor(img, cv2.COLOR_RGB2HSV)[:, :, 1]),
+        ("value",         cv2.cvtColor(img, cv2.COLOR_RGB2HSV)[:, :, 2]),
+        ("lightness",     cv2.cvtColor(img, cv2.COLOR_RGB2LAB)[:, :, 0]),
+        ("green-magenta", cv2.cvtColor(img, cv2.COLOR_RGB2LAB)[:, :, 1]),
+        ("blue-yellow",   cv2.cvtColor(img, cv2.COLOR_RGB2LAB)[:, :, 2]),
+    ]
+    colors = [
+        "red", "green", "blue", "goldenrod", "gray",
+        "black", "purple", "magenta", "cyan",
+    ]
+    fig, ax = plt.subplots(figsize=(8, 4))
+    masked = mask > 0
+    for (name, ch), color in zip(channels, colors):
+        pixels = ch[masked].flatten()
+        ax.hist(pixels, bins=256, range=(0, 256), density=True,
+                histtype="step", label=name, color=color, linewidth=1)
+    ax.set_xlabel("Pixel intensity")
+    ax.set_ylabel("Proportion of pixels (%)")
+    ax.legend(fontsize=7, ncol=3)
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    arr = cv2.imdecode(np.frombuffer(buf.read(), np.uint8), cv2.IMREAD_COLOR)
+    return cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
 
 
 # ---------------------------------------------------------------------------
@@ -90,8 +132,8 @@ def _pipeline(img: np.ndarray) -> dict:
         for pt in pts:
             cv2.circle(lm_img, (int(pt[0][0]), int(pt[0][1])), 3, color, -1)
 
-    # 8. Color histogram figure
-    hist_fig = pcv.visualize.histogram(img=img, mask=filtered_mask)
+    # 8. Color histogram — 9 channels across RGB, HSV, LAB
+    hist_arr = _color_histogram(img, filtered_mask)
 
     return {
         "Original": img,
@@ -100,7 +142,7 @@ def _pipeline(img: np.ndarray) -> dict:
         "Roi objects": roi_img,
         "Analyze object": analyze_img,
         "Pseudolandmarks": lm_img,
-        "_hist_fig": hist_fig,
+        "Color histogram": hist_arr,
     }
 
 
@@ -109,13 +151,18 @@ def _pipeline(img: np.ndarray) -> dict:
 # ---------------------------------------------------------------------------
 
 def _show(results: dict) -> None:
-    """Display 6 image panels + color histogram."""
-    panel_keys = [k for k in results if not k.startswith("_")]
-    n = len(panel_keys)
-    fig, axes = plt.subplots(2, (n + 1) // 2, figsize=(4 * ((n + 1) // 2), 8))
+    """Display 6 image panels in one window, histogram in a second."""
+    backend = matplotlib.get_backend().lower()
+    non_interactive = {"agg", "cairo", "pdf", "pgf", "ps", "svg", "template"}
+
+    image_keys = [k for k in results if k != "Color histogram"]
+    n = len(image_keys)
+    cols = 3
+    rows = (n + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 4 * rows))
     axes = axes.flatten()
 
-    for ax, key in zip(axes, panel_keys):
+    for ax, key in zip(axes, image_keys):
         img = results[key]
         if img.ndim == 2:
             ax.imshow(img, cmap="gray")
@@ -129,27 +176,27 @@ def _show(results: dict) -> None:
 
     fig.tight_layout()
 
-    backend = matplotlib.get_backend().lower()
-    non_interactive = {"agg", "cairo", "pdf", "pgf", "ps", "svg", "template"}
+    if "Color histogram" in results:
+        fig2, ax2 = plt.subplots(figsize=(8, 5))
+        ax2.imshow(results["Color histogram"])
+        ax2.set_title("Color histogram")
+        ax2.axis("off")
+        fig2.tight_layout()
+
     if backend in non_interactive:
-        out = "transformation_result.png"
-        fig.savefig(out, bbox_inches="tight")
-        print(f"No display available; saved panels to {out}")
+        fig.savefig("transformation_result.png", bbox_inches="tight")
+        print("No display available; saved panels to "
+              "transformation_result.png")
+        if "Color histogram" in results:
+            fig2.savefig("transformation_histogram.png", bbox_inches="tight")
+            print("Saved histogram to transformation_histogram.png")
     else:
         plt.show()
-
-    hist_fig = results.get("_hist_fig")
-    if hist_fig is not None:
-        try:
-            hist_fig.show()
-        except Exception:  # noqa: BLE001
-            hist_fig.save("transformation_histogram.png")
 
 
 def _save(results: dict, stem: str, dest_dir: str) -> None:
     """Save each panel as <dest_dir>/<stem>_<label>.png."""
-    panel_keys = [k for k in results if not k.startswith("_")]
-    for key in panel_keys:
+    for key in results:
         img = results[key]
         label = key.lower().replace(" ", "_")
         out_path = os.path.join(dest_dir, f"{stem}_{label}.png")
