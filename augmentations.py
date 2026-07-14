@@ -7,30 +7,30 @@ import numpy as np
 AUGMENTATIONS = {
     "Flip": A.HorizontalFlip(p=1.0),
     "Rotate": A.Rotate(
-        limit=(-25, 25),
+        limit=(-60, -30),
         border_mode=cv2.BORDER_REFLECT_101,
         p=1.0,
     ),
     "Shear": A.Affine(
-        shear={"x": (-12, 12), "y": 0},
+        shear={"x": (20, 30), "y": 0},
         border_mode=cv2.BORDER_REFLECT_101,
         p=1.0,
     ),
     "Zoom": A.RandomResizedCrop(
         size=(256, 256),
-        scale=(0.75, 1.0),
+        scale=(0.5, 0.6),
         ratio=(0.9, 1.1),
         p=1.0,
     ),
     "Lighting": A.RandomBrightnessContrast(
-        brightness_limit=0.2,
-        contrast_limit=0.2,
+        brightness_limit=(0.3, 0.6),
+        contrast_limit=(0.3, 0.6),
         p=1.0,
     ),
     "Color": A.HueSaturationValue(
-        hue_shift_limit=10,
-        sat_shift_limit=20,
-        val_shift_limit=10,
+        hue_shift_limit=(30, 60),
+        sat_shift_limit=(60, 100),
+        val_shift_limit=(30, 60),
         p=1.0,
     ),
 }
