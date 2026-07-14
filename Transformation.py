@@ -159,9 +159,10 @@ def _pipeline(img: np.ndarray) -> dict:
     #    Color augmentation shifted the leaf away from green, then closes
     #    small internal holes from vein highlights.
     binary = _close_mask(_segment_leaf(img))
-    # "Gaussian blur" panel: binary mask (matches subject figure IV.2 —
-    # a black background with the leaf as a bright silhouette).
-    blurred = binary
+    # "Gaussian blur" panel: actual blur of the HSV-s channel, matching the
+    # texture visible in subject figure IV.2 (not the binary mask).
+    gray_hsv = pcv.rgb2gray_hsv(rgb_img=img, channel="s")
+    blurred = pcv.gaussian_blur(img=gray_hsv, ksize=(5, 5), sigma_x=0)
 
     # 3. Apply mask to original
     masked = pcv.apply_mask(img=img, mask=binary, mask_color="white")
@@ -184,9 +185,14 @@ def _pipeline(img: np.ndarray) -> dict:
         cv2.rectangle(roi_img, (x0, y0), (x0 + bw, y0 + bh), (0, 0, 255), 2)
 
     # 6. Analyze object — shape overlay (hull, axes, centroid)
-    analyze_img = pcv.analyze.size(
-        img=img, labeled_mask=filtered_mask, n_labels=1
+    # PlantCV draws with BGR color values, so convert to BGR first so its
+    # (255,0,0) perimeter renders as blue (not red) and (255,0,255) hull/axes
+    # render as magenta, matching subject figure IV.5.
+    bgr_for_analyze = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    analyze_result = pcv.analyze.size(
+        img=bgr_for_analyze, labeled_mask=filtered_mask, n_labels=1
     )
+    analyze_img = cv2.cvtColor(analyze_result, cv2.COLOR_BGR2RGB)
 
     # 7. Pseudolandmarks
     top, bottom, center_v = pcv.homology.x_axis_pseudolandmarks(
