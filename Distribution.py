@@ -96,11 +96,7 @@ def group_by_plant(
         bucket[label] = count
     return groups
 
-# ---------------------------------------------------------------------------
-# Charting
-# ---------------------------------------------------------------------------
 def make_charts(plant: str, class_counts: Dict[str, int]) -> plt.Figure:
-    """Build one figure with a pie + bar chart for a single plant group."""
     labels = sorted(class_counts.keys())
     counts = [class_counts[name] for name in labels]
     cmap = plt.get_cmap("tab10")
@@ -137,54 +133,6 @@ def make_charts(plant: str, class_counts: Dict[str, int]) -> plt.Figure:
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     return fig
 
-
-_NON_INTERACTIVE_BACKENDS = {
-    "agg", "cairo", "pdf", "pgf", "ps", "svg", "template",
-}
-
-
-def _backend_is_interactive() -> bool:
-    """True if the active matplotlib backend can actually display a window."""
-    try:
-        backend = matplotlib.get_backend().lower()
-        return backend not in _NON_INTERACTIVE_BACKENDS
-    except Exception:  # noqa: BLE001
-        return False
-
-
-def _save_figures(figures: List[Tuple[str, "plt.Figure"]]) -> None:
-    """
-    Save each figure as `<plant>_distribution.png` in the current directory.
-    """
-    for plant, fig in figures:
-        out = f"{plant}_distribution.png"
-        try:
-            fig.savefig(out, bbox_inches="tight")
-            print(f"Saved {out}")
-        except Exception as exc:  # noqa: BLE001
-            print(f"Warning: could not save {out}: {exc}", file=sys.stderr)
-
-
-def show_or_save(figures: List[Tuple[str, "plt.Figure"]]) -> None:
-    """
-    Display figures if possible, otherwise save them to disk.
-    """
-    if not _backend_is_interactive():
-        _save_figures(figures)
-        return
-    try:
-        plt.show()
-    except Exception as exc:  # noqa: BLE001
-        print(
-            f"Display unavailable ({exc}); saving figures instead.",
-            file=sys.stderr,
-        )
-        _save_figures(figures)
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 def parse_args(argv: List[str]) -> argparse.Namespace:
     """Parse CLI args. Exits cleanly (no traceback) on validation failure."""
     parser = argparse.ArgumentParser(
@@ -215,7 +163,6 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         raise SystemExit(1)
     return args
 
-
 def main(argv: List[str]) -> int:
     """Program entry point."""
     try:
@@ -243,12 +190,10 @@ def main(argv: List[str]) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    figures: List[Tuple[str, plt.Figure]] = []
-    for plant in sorted(groups.keys()):
-        fig = make_charts(plant, groups[plant])
-        figures.append((plant, fig))
+    for plant in sorted(groups):
+        make_charts(plant, groups[plant])
 
-    show_or_save(figures)
+    plt.show()
     return 0
 
 
@@ -258,3 +203,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Interrupted.", file=sys.stderr)
         sys.exit(130)
+    except Exception as exc:
+        print(f"Error: unexpected failure: {exc}", file=sys.stderr)
+        sys.exit(1)
