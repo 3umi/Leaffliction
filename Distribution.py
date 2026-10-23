@@ -67,57 +67,34 @@ def discover_classes(root: str) -> Dict[Tuple[str, ...], int]:
         )
     return classes
 
-def _flatten_label(components: Tuple[str, ...], root: str) -> str:
-    """Flatten relative path components to an underscore-joined display label.
-
-    If the discovery root *is* the single class directory (no components),
-    fall back to the basename of `root` itself.
-    """
+def class_label(components: Tuple[str, ...], root: str) -> str:
     if not components:
         return os.path.basename(os.path.normpath(root)) or root
     return "_".join(components)
 
-
 def _plant_of(components: Tuple[str, ...], root: str) -> str:
-    """Derive the plant group for a class, per the two-tier rule (§5)."""
-    if not components:
-        # Root itself is the class -> its own plant group.
-        name = os.path.basename(os.path.normpath(root)) or root
-        return _plant_from_flat_name(name)
-    if len(components) > 1:
+    if len(components) == 2:
         return components[0]
-    return _plant_from_flat_name(components[0])
-
+    return _plant_from_flat_name(class_label(components, root))
 
 def _plant_from_flat_name(name: str) -> str:
-    """
-    Plant token = substring before first '_' or '-'; whole name if neither.
-    """
     for sep in ("_", "-"):
         idx = name.find(sep)
         if idx > 0:
             return name[:idx]
     return name
 
-
 def group_by_plant(
     classes: Dict[Tuple[str, ...], int],
     root: str,
 ) -> Dict[str, Dict[str, int]]:
-    """
-    Group discovered classes by plant. Returns {plant: {display_label: count}}.
-    """
     groups: Dict[str, Dict[str, int]] = {}
-    for components, count in classes.items():
-        plant = _plant_of(components, root)
-        label = _flatten_label(components, root)
+    for key, count in classes.items():
+        plant = _plant_of(key, root)
+        label = class_label(key, root)
         bucket = groups.setdefault(plant, {})
-        if label in bucket:
-            # Should be impossible (relative paths are unique);
-            raise ValueError(f"Duplicate class label detected: {label}")
         bucket[label] = count
     return groups
-
 
 # ---------------------------------------------------------------------------
 # Charting
