@@ -256,16 +256,8 @@ def main(argv: List[str]) -> int:
 
     try:
         classes = discover_classes(args.directory)
-    except Exception as exc:  # noqa: BLE001
-        print(f"Error during discovery: {exc}", file=sys.stderr)
-        return 1
-
-    if not classes:
-        print(
-            f"Error: no class directories with images found under "
-            f"{args.directory}",
-            file=sys.stderr,
-        )
+    except (ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
     groups = group_by_plant(classes, args.directory)

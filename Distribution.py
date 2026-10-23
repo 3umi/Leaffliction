@@ -164,14 +164,6 @@ def main(argv: List[str]) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    if not classes:
-        print(
-            f"Error: no class directories with images found under "
-            f"{args.directory}",
-            file=sys.stderr,
-        )
-        return 1
-
     groups = group_by_plant(classes, args.directory)
 
     for plant in sorted(groups):
