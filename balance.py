@@ -29,6 +29,7 @@ MAX_REROLLS = 50
 def _is_image(name: str) -> bool:
     return os.path.splitext(name)[1].lower() in IMAGE_EXTS
 
+
 def _class_dir(root: str, components: Tuple[str, ...]) -> str:
     """Absolute directory holding the source images for a class."""
     if not components:

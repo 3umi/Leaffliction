@@ -8,8 +8,10 @@ from typing import Dict, List, Tuple
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
+
 def _is_image(name: str) -> bool:
     return os.path.splitext(name)[1].lower() in IMAGE_EXTS
+
 
 def _iter_subdirs(path: str) -> List[os.DirEntry]:
     return [
@@ -17,6 +19,7 @@ def _iter_subdirs(path: str) -> List[os.DirEntry]:
         if not e.name.startswith(".")
         and e.is_dir(follow_symlinks=False)
     ]
+
 
 def _count_images(path: str) -> int:
     return sum(
@@ -26,11 +29,13 @@ def _count_images(path: str) -> int:
         and _is_image(e.name)
     )
 
+
 def _count_all_images(path: str) -> int:
     total = _count_images(path)
     for sub in _iter_subdirs(path):
         total += _count_all_images(sub.path)
     return total
+
 
 def discover_classes(root: str) -> Dict[Tuple[str, ...], int]:
     classes: Dict[Tuple[str, ...], int] = {}
@@ -66,15 +71,18 @@ def discover_classes(root: str) -> Dict[Tuple[str, ...], int]:
         )
     return classes
 
+
 def class_label(components: Tuple[str, ...], root: str) -> str:
     if not components:
         return os.path.basename(os.path.normpath(root)) or root
     return "_".join(components)
 
+
 def _plant_of(components: Tuple[str, ...], root: str) -> str:
     if len(components) == 2:
         return components[0]
     return _plant_from_flat_name(class_label(components, root))
+
 
 def _plant_from_flat_name(name: str) -> str:
     for sep in ("_", "-"):
@@ -82,6 +90,7 @@ def _plant_from_flat_name(name: str) -> str:
         if idx > 0:
             return name[:idx]
     return name
+
 
 def group_by_plant(
     classes: Dict[Tuple[str, ...], int],
@@ -94,6 +103,7 @@ def group_by_plant(
         bucket = groups.setdefault(plant, {})
         bucket[label] = count
     return groups
+
 
 def make_charts(plant: str, class_counts: Dict[str, int]) -> plt.Figure:
     labels = sorted(class_counts.keys())
@@ -132,6 +142,7 @@ def make_charts(plant: str, class_counts: Dict[str, int]) -> plt.Figure:
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     return fig
 
+
 def parse_args(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="Distribution.py",
@@ -155,6 +166,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         parser.error(f"not a directory: {args.directory}")
     return args
 
+
 def main(argv: List[str]) -> int:
     args = parse_args(argv)
 
@@ -171,6 +183,7 @@ def main(argv: List[str]) -> int:
 
     plt.show()
     return 0
+
 
 if __name__ == "__main__":
     try:
