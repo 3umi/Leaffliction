@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 import augmentations
-from Distribution import _safe_scandir, discover_classes, group_by_plant
+from Distribution import discover_classes, group_by_plant
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
@@ -45,17 +45,12 @@ def _class_dir(root: str, components: Tuple[str, ...]) -> str:
 
 
 def _list_sources(class_path: str) -> List[str]:
-    """List image files directly in a class directory."""
-    out: List[str] = []
-    for entry in _safe_scandir(class_path):
-        if entry.name.startswith("."):
-            continue
-        try:
-            if entry.is_file(follow_symlinks=False) and _is_image(entry.name):
-                out.append(entry.path)
-        except OSError:
-            continue
-    return sorted(out)
+    return sorted(
+        e.path for e in os.scandir(class_path)
+        if not e.name.startswith(".")
+        and e.is_file(follow_symlinks=False)
+        and _is_image(e.name)
+    )
 
 
 def _load_rgb(path: str) -> np.ndarray:
