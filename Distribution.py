@@ -1,11 +1,10 @@
 import argparse
 import os
 import sys
-from typing import Dict, Iterable, List, Tuple
-
-import matplotlib
 
 import matplotlib.pyplot as plt
+
+from typing import Dict, List, Tuple
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
@@ -134,7 +133,6 @@ def make_charts(plant: str, class_counts: Dict[str, int]) -> plt.Figure:
     return fig
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
-    """Parse CLI args. Exits cleanly (no traceback) on validation failure."""
     parser = argparse.ArgumentParser(
         prog="Distribution.py",
         description=(
@@ -149,26 +147,16 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
             "Dataset directory (flat or nested layout, or a single class dir)."
         ),
     )
-    try:
-        args = parser.parse_args(argv[1:])
-    except SystemExit as exc:
-        # argparse already printed a clean message; propagate its code.
-        raise SystemExit(exc.code)
 
+    args = parser.parse_args(argv[1:])
     if not os.path.exists(args.directory):
-        print(f"Error: path does not exist: {args.directory}", file=sys.stderr)
-        raise SystemExit(1)
+        parser.error(f"path does not exist: {args.directory}")
     if not os.path.isdir(args.directory):
-        print(f"Error: not a directory: {args.directory}", file=sys.stderr)
-        raise SystemExit(1)
+        parser.error(f"not a directory: {args.directory}")
     return args
 
 def main(argv: List[str]) -> int:
-    """Program entry point."""
-    try:
-        args = parse_args(argv)
-    except SystemExit as exc:
-        return int(exc.code) if exc.code is not None else 0
+    args = parse_args(argv)
 
     try:
         classes = discover_classes(args.directory)
@@ -184,18 +172,13 @@ def main(argv: List[str]) -> int:
         )
         return 1
 
-    try:
-        groups = group_by_plant(classes, args.directory)
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+    groups = group_by_plant(classes, args.directory)
 
     for plant in sorted(groups):
         make_charts(plant, groups[plant])
 
     plt.show()
     return 0
-
 
 if __name__ == "__main__":
     try:
