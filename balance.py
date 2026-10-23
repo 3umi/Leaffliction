@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 import augmentations
-from Distribution import discover_classes, group_by_plant
+from Distribution import class_label, discover_classes, group_by_plant
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
@@ -28,14 +28,6 @@ MAX_REROLLS = 50
 
 def _is_image(name: str) -> bool:
     return os.path.splitext(name)[1].lower() in IMAGE_EXTS
-
-
-def _label_of(components: Tuple[str, ...], root: str) -> str:
-    """Flattened class label (mirrors Distribution._flatten_label)."""
-    if not components:
-        return os.path.basename(os.path.normpath(root)) or root
-    return "_".join(components)
-
 
 def _class_dir(root: str, components: Tuple[str, ...]) -> str:
     """Absolute directory holding the source images for a class."""
@@ -276,11 +268,7 @@ def main(argv: List[str]) -> int:
         )
         return 1
 
-    try:
-        groups = group_by_plant(classes, args.directory)
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+    groups = group_by_plant(classes, args.directory)
 
     targets = _compute_targets(groups, args.target)
     _print_plan(groups, targets)
@@ -300,7 +288,7 @@ def main(argv: List[str]) -> int:
     rng = random.Random(seed)
 
     label_to_components: Dict[str, Tuple[str, ...]] = {
-        _label_of(c, args.directory): c for c in classes
+        class_label(c, args.directory): c for c in classes
     }
 
     try:
