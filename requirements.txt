@@ -1,11 +1,9 @@
 numpy
 matplotlib
-Pillow
 opencv-python
-opencv-python-headless
-albumentations
-plantcv
+albumentations>=2.0
+plantcv>=4.0
 scikit-learn
-tensorflow
+torch
+torchvision
 flake8
-pytest
