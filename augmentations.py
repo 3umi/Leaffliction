@@ -2,19 +2,36 @@ import cv2
 import albumentations as A
 import numpy as np
 
-R = cv2.BORDER_REFLECT_101
+BORDER = cv2.BORDER_REFLECT_101
 
 AUGMENTATIONS = {
     "Flip": A.HorizontalFlip(p=1.0),
-    "Rotate": A.Rotate(limit=(-30, 30), border_mode=R, p=1.0),
-    "Skew": A.Perspective(scale=(0.05, 0.1), keep_size=True,
-                          border_mode=R, p=1.0),
-    "Shear": A.Affine(shear={"x": (-20, 20), "y": 0},
-                      border_mode=R, p=1.0),
-    "Zoom": A.Affine(scale=(1.1, 1.25), border_mode=R, p=1.0),
-    "Lighting": A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2),
-                                           contrast_limit=(-0.2, 0.2),
-                                           p=1.0),
+    "Rotate": A.Rotate(
+        limit=(-30, 30),
+        border_mode=BORDER,
+        p=1.0
+    ),
+    "Skew": A.Perspective(
+        scale=(0.05, 0.1),
+        keep_size=True,
+        border_mode=BORDER,
+        p=1.0
+    ),
+    "Shear": A.Affine(
+        shear={"x": (-20, 20), "y": 0},
+        border_mode=BORDER,
+        p=1.0
+    ),
+    "Zoom": A.Affine(
+        scale=(1.1, 1.25),
+        border_mode=BORDER,
+        p=1.0
+    ),
+    "Lighting": A.RandomBrightnessContrast(
+        brightness_limit=(-0.2, 0.2),
+        contrast_limit=(-0.2, 0.2),
+        p=1.0
+    ),
 }
 
 AUGMENTATION_NAMES = list(AUGMENTATIONS.keys())

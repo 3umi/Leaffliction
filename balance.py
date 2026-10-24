@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""Part 2 — Balance a leaf dataset via augmentation.
-
-Discovers classes (via Distribution.py), groups them by plant, and
-generates augmented images per class until every class within a plant
-reaches that plant's max class count. Writes to `augmented_directory/`,
-which mirrors the input structure with one subdirectory per class.
-"""
 import argparse
 import os
 import random
@@ -18,7 +11,7 @@ import cv2
 import numpy as np
 
 import augmentations
-from Distribution import class_label, discover_classes, group_by_plant
+from Distribution import class_label, discover_classes
 
 from utils.images import list_images
 
@@ -59,42 +52,13 @@ def _weighted_choice(
     return rng.choices(sources, weights=weights, k=1)[0]
 
 
-def _compute_targets(
-    groups: Dict[str, Dict[str, int]],
-    override: int,
-) -> Dict[str, int]:
-    """Compute per-class target count.
-
-    If `override` is a positive int, every class targets that count.
-    Otherwise (None) the target for a class is the max count within
-    its plant group.
-    """
-    targets: Dict[str, int] = {}
-    for plant, class_counts in groups.items():
-        plant_max = max(class_counts.values())
-        target = override if override else plant_max
-        for label in class_counts:
-            targets[label] = target
-    return targets
-
-
-def _print_plan(
-    groups: Dict[str, Dict[str, int]],
-    targets: Dict[str, int],
-) -> None:
-    """Print the per-class balancing plan to stdout."""
-    for plant in sorted(groups.keys()):
-        for label in sorted(groups[plant].keys()):
-            current = groups[plant][label]
-            target = targets[label]
-            if current >= target:
-                print(f"{label}: {current} (at target)")
-            else:
-                needed = target - current
-                print(
-                    f"{label}: {current} → {target} "
-                    f"(+{needed} augmented)"
-                )
+def _print_plan(counts, target):
+    for label in sorted(counts):
+        n = counts[label]
+        if n >= target:
+            print(f"{label}: {n} (at target)")
+        else:
+            print(f"{label}: {n} → {target} (+{target - n} augmented)")
 
 
 def _generate_for_class(
@@ -185,27 +149,17 @@ def _copy_originals(sources: List[str], dest_dir: str) -> int:
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
-    """Parse and validate CLI args."""
     parser = argparse.ArgumentParser(
         prog="balance.py",
         description=(
             "Balance a leaf-image dataset by generating augmentations "
-            "until each class within a plant reaches that plant's max."
+            "until every class reaches the size of the largest class."
         ),
         epilog="Example: ./balance.py images/ --seed 42",
     )
     parser.add_argument(
         "directory",
         help="Dataset root directory (e.g. images/).",
-    )
-    parser.add_argument(
-        "--target",
-        type=int,
-        default=None,
-        help=(
-            "Override per-class target count. Defaults to the per-plant "
-            "max."
-        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -232,9 +186,6 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
             file=sys.stderr,
         )
         raise SystemExit(1)
-    if args.target is not None and args.target <= 0:
-        print("Error: --target must be a positive integer.", file=sys.stderr)
-        raise SystemExit(1)
     return args
 
 
@@ -250,10 +201,9 @@ def main(argv: List[str]) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    groups = group_by_plant(classes, args.directory)
-
-    targets = _compute_targets(groups, args.target)
-    _print_plan(groups, targets)
+    counts = {class_label(c, args.directory): n for c, n in classes.items()}
+    target = max(counts.values())
+    _print_plan(counts, target)
 
     if args.dry_run:
         return 0
@@ -308,7 +258,7 @@ def main(argv: List[str]) -> int:
 
         _copy_originals(sources, dest_dir)
 
-        needed = targets[label] - len(sources)
+        needed = target - len(sources)
         if needed <= 0:
             print(f"[{label}] at target ({len(sources)}).")
             continue
