@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Part 2 — Generate 6 augmented copies of a leaf image.
 
 Usage:

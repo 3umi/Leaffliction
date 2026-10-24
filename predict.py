@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Part 4 — Predict disease for a single leaf image."""
 import sys
 

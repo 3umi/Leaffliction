@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Part 3 — Image transformation pipeline using PlantCV.
 
 Single-image mode:
@@ -21,12 +22,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from plantcv import plantcv as pcv
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
-
+from utils.images import list_images
 
 # ---------------------------------------------------------------------------
 # Color histogram helper
 # ---------------------------------------------------------------------------
+
 
 def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """Compute a 9-channel color histogram and return it as an RGB array."""
@@ -302,9 +303,6 @@ def _save(results: dict, stem: str, dest_dir: str,
 # Single-image and batch modes
 # ---------------------------------------------------------------------------
 
-def _is_image(name: str) -> bool:
-    return os.path.splitext(name)[1].lower() in IMAGE_EXTS
-
 
 def run_single(image_path: str) -> int:
     if not os.path.isfile(image_path):
@@ -333,16 +331,14 @@ def run_batch(src_dir: str, dst_dir: str,
         return 1
     os.makedirs(dst_dir, exist_ok=True)
 
-    images: List[str] = [
-        f for f in sorted(os.listdir(src_dir)) if _is_image(f)
-    ]
+    images = list_images(src_dir)
     if not images:
         print(f"Error: no images found in {src_dir}", file=sys.stderr)
         return 1
 
     errors = 0
-    for filename in images:
-        path = os.path.join(src_dir, filename)
+    for path in images:
+        filename = os.path.basename(path)
         stem = os.path.splitext(filename)[0]
         try:
             img, _, _ = pcv.readimage(filename=path)
