@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Part 2 — Balance a leaf dataset via augmentation.
 
 Discovers classes (via Distribution.py), groups them by plant, and

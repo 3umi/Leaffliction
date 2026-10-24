@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Part 3 — Image transformation pipeline using PlantCV.
 
 Single-image mode:

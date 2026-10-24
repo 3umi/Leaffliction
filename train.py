@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Part 4 — Train a classifier on the augmented/transformed dataset."""
 import sys
 
