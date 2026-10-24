@@ -6,12 +6,7 @@ import matplotlib.pyplot as plt
 
 from typing import Dict, List, Tuple
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
-
-
-def _is_image(name: str) -> bool:
-    return os.path.splitext(name)[1].lower() in IMAGE_EXTS
-
+from utils.images import list_images
 
 def _iter_subdirs(path: str) -> List[os.DirEntry]:
     return [
@@ -20,18 +15,8 @@ def _iter_subdirs(path: str) -> List[os.DirEntry]:
         and e.is_dir(follow_symlinks=False)
     ]
 
-
-def _count_images(path: str) -> int:
-    return sum(
-        1 for e in os.scandir(path)
-        if not e.name.startswith(".")
-        and e.is_file(follow_symlinks=False)
-        and _is_image(e.name)
-    )
-
-
 def _count_all_images(path: str) -> int:
-    total = _count_images(path)
+    total = len(list_images(path))
     for sub in _iter_subdirs(path):
         total += _count_all_images(sub.path)
     return total
@@ -40,7 +25,7 @@ def _count_all_images(path: str) -> int:
 def discover_classes(root: str) -> Dict[Tuple[str, ...], int]:
     classes: Dict[Tuple[str, ...], int] = {}
 
-    n = _count_images(root)
+    n = len(list_images(root))
     if n > 0:
         if any(_count_all_images(s.path) for s in _iter_subdirs(root)):
             raise ValueError(
@@ -51,12 +36,12 @@ def discover_classes(root: str) -> Dict[Tuple[str, ...], int]:
         return classes
 
     for s in _iter_subdirs(root):
-        n = _count_images(s.path)
+        n = len(list_images(s.path))
         if n > 0:
             classes[(s.name,)] = n
             continue
         for c in _iter_subdirs(s.path):
-            n = _count_images(c.path)
+            n = len(list_images(c.path))
             if n > 0:
                 classes[(s.name, c.name)] = n
 

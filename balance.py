@@ -19,6 +19,8 @@ import numpy as np
 import augmentations
 from Distribution import class_label, discover_classes, group_by_plant
 
+from utils.images import list_images
+
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 OUTPUT_DIR = "augmented_directory"
@@ -26,24 +28,11 @@ MAX_PAIR_COUNT = 3
 MAX_REROLLS = 50
 
 
-def _is_image(name: str) -> bool:
-    return os.path.splitext(name)[1].lower() in IMAGE_EXTS
-
-
 def _class_dir(root: str, components: Tuple[str, ...]) -> str:
     """Absolute directory holding the source images for a class."""
     if not components:
         return root
     return os.path.join(root, *components)
-
-
-def _list_sources(class_path: str) -> List[str]:
-    return sorted(
-        e.path for e in os.scandir(class_path)
-        if not e.name.startswith(".")
-        and e.is_file(follow_symlinks=False)
-        and _is_image(e.name)
-    )
 
 
 def _load_rgb(path: str) -> np.ndarray:
@@ -299,7 +288,7 @@ def main(argv: List[str]) -> int:
     for label in sorted(label_to_components.keys()):
         components = label_to_components[label]
         class_path = _class_dir(args.directory, components)
-        sources = _list_sources(class_path)
+        sources = list_images(class_path)
         if not sources:
             print(
                 f"Warning: no source images in {class_path}; skipping.",
