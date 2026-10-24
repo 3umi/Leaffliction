@@ -4,8 +4,10 @@ from typing import List
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
+
 def is_image(name: str) -> bool:
     return os.path.splitext(name)[1].lower() in IMAGE_EXTS
+
 
 def list_images(path: str) -> List[str]:
     return sorted(

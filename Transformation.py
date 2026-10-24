@@ -27,6 +27,7 @@ from utils.images import list_images
 # Color histogram helper
 # ---------------------------------------------------------------------------
 
+
 def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """Compute a 9-channel color histogram and return it as an RGB array."""
     channels = [

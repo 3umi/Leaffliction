@@ -22,7 +22,6 @@ from Distribution import class_label, discover_classes, group_by_plant
 from utils.images import list_images
 
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 OUTPUT_DIR = "augmented_directory"
 MAX_PAIR_COUNT = 3
 MAX_REROLLS = 50

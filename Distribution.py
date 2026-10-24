@@ -8,12 +8,14 @@ from typing import Dict, List, Tuple
 
 from utils.images import list_images
 
+
 def _iter_subdirs(path: str) -> List[os.DirEntry]:
     return [
         e for e in os.scandir(path)
         if not e.name.startswith(".")
         and e.is_dir(follow_symlinks=False)
     ]
+
 
 def _count_all_images(path: str) -> int:
     total = len(list_images(path))
