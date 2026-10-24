@@ -1,163 +1,90 @@
-"""Part 1 — Analyze and visualize dataset class distribution.
-
-Walks a dataset directory in a structure-agnostic way, derives one
-"plant group" per top-level taxonomy, and produces a pie and bar chart
-pair per plant.
-"""
 import argparse
 import os
 import sys
-from typing import Dict, Iterable, List, Tuple
-
-import matplotlib
 
 import matplotlib.pyplot as plt
 
+from typing import Dict, List, Tuple
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
-MAX_DEPTH = 3
 
 
-# ---------------------------------------------------------------------------
-# Filesystem helpers
-# ---------------------------------------------------------------------------
 def _is_image(name: str) -> bool:
-    """
-    Return True if `name` has a recognised image extension (case-insensitive).
-    """
-    ext = os.path.splitext(name)[1].lower()
-    return ext in IMAGE_EXTS
+    return os.path.splitext(name)[1].lower() in IMAGE_EXTS
 
 
-def _safe_scandir(path: str) -> List[os.DirEntry]:
-    """
-    List directory entries, returning [] (and warning) on permission errors.
-    """
-    try:
-        return list(os.scandir(path))
-    except (PermissionError, OSError) as exc:
-        print(f"Warning: cannot read {path}: {exc}", file=sys.stderr)
-        return []
+def _iter_subdirs(path: str) -> List[os.DirEntry]:
+    return [
+        e for e in os.scandir(path)
+        if not e.name.startswith(".")
+        and e.is_dir(follow_symlinks=False)
+    ]
 
 
-def _iter_subdirs(path: str) -> Iterable[os.DirEntry]:
-    """Yield non-hidden sub-directories of `path`."""
-    for entry in _safe_scandir(path):
-        if entry.name.startswith("."):
-            continue
-        try:
-            if entry.is_dir(follow_symlinks=False):
-                yield entry
-        except OSError:
-            continue
+def _count_images(path: str) -> int:
+    return sum(
+        1 for e in os.scandir(path)
+        if not e.name.startswith(".")
+        and e.is_file(follow_symlinks=False)
+        and _is_image(e.name)
+    )
 
 
-def _direct_image_count(path: str) -> int:
-    """Count image files sitting directly in `path` (non-recursive)."""
-    count = 0
-    for entry in _safe_scandir(path):
-        if entry.name.startswith("."):
-            continue
-        try:
-            if entry.is_file(follow_symlinks=False) and _is_image(entry.name):
-                count += 1
-        except OSError:
-            continue
-    return count
+def _count_all_images(path: str) -> int:
+    total = _count_images(path)
+    for sub in _iter_subdirs(path):
+        total += _count_all_images(sub.path)
+    return total
 
 
-def dir_contains_images(path: str, max_depth: int = MAX_DEPTH) -> bool:
-    """
-    Return True if `path` or any descendant (up to max_depth)
-    contains an image.
-
-    Short-circuits on the first image found. Hidden dirs and permission errors
-    are tolerated silently (with a warning for the latter via _safe_scandir).
-    """
-    if max_depth < 0:
-        return False
-    for entry in _safe_scandir(path):
-        if entry.name.startswith("."):
-            continue
-        try:
-            if entry.is_file(follow_symlinks=False) and _is_image(entry.name):
-                return True
-            if entry.is_dir(follow_symlinks=False):
-                if dir_contains_images(entry.path, max_depth - 1):
-                    return True
-        except OSError:
-            continue
-    return False
-
-
-# ---------------------------------------------------------------------------
-# Discovery (Rule C)
-# ---------------------------------------------------------------------------
-# Discovery invariant ("Rule C"):
-#   A directory is a CLASS iff it contains images AND has no sub-directory
-#   (at any depth) that contains images. Otherwise, if it has image-bearing
-#   sub-directories, it is a CONTAINER and we recurse. A directory with no
-#   images in or below it is skipped silently. Loose images sitting directly
-#   in a container are intentionally ignored (they have no class label).
 def discover_classes(root: str) -> Dict[Tuple[str, ...], int]:
-    """Discover leaf class directories under `root`.
-
-    Returns a dict mapping the class's path components (relative to `root`)
-    to its direct image count. An empty tuple key means the root itself is
-    the single class directory.
-    """
     classes: Dict[Tuple[str, ...], int] = {}
 
-    def visit(path: str, rel: Tuple[str, ...], depth: int) -> None:
-        if depth > MAX_DEPTH:
-            return
-        image_bearing_subdirs = [
-            sub for sub in _iter_subdirs(path)
-            if dir_contains_images(sub.path, MAX_DEPTH - depth - 1)
-        ]
-        if image_bearing_subdirs:
-            # CONTAINER: recurse, ignore loose images at this level.
-            for sub in image_bearing_subdirs:
-                visit(sub.path, rel + (sub.name,), depth + 1)
-            return
-        # No image-bearing children -> leaf candidate.
-        count = _direct_image_count(path)
-        if count > 0:
-            classes[rel] = count
+    n = _count_images(root)
+    if n > 0:
+        if any(_count_all_images(s.path) for s in _iter_subdirs(root)):
+            raise ValueError(
+                f"{n} loose image(s) directly in {root}: move them "
+                f"into a class folder or remove them"
+            )
+        classes[()] = n
+        return classes
 
-    visit(root, tuple(), 0)
+    for s in _iter_subdirs(root):
+        n = _count_images(s.path)
+        if n > 0:
+            classes[(s.name,)] = n
+            continue
+        for c in _iter_subdirs(s.path):
+            n = _count_images(c.path)
+            if n > 0:
+                classes[(s.name, c.name)] = n
+
+    total = _count_all_images(root)
+    found = sum(classes.values())
+    if total == 0:
+        raise ValueError(f"no images found under {root}")
+    if found != total:
+        raise ValueError(
+            f"{total - found} image(s) under {root} are not in a class "
+            f"folder (expected a single, flat or nested layout)"
+        )
     return classes
 
 
-# ---------------------------------------------------------------------------
-# Class naming and plant grouping
-# ---------------------------------------------------------------------------
-def _flatten_label(components: Tuple[str, ...], root: str) -> str:
-    """Flatten relative path components to an underscore-joined display label.
-
-    If the discovery root *is* the single class directory (no components),
-    fall back to the basename of `root` itself.
-    """
+def class_label(components: Tuple[str, ...], root: str) -> str:
     if not components:
         return os.path.basename(os.path.normpath(root)) or root
     return "_".join(components)
 
 
 def _plant_of(components: Tuple[str, ...], root: str) -> str:
-    """Derive the plant group for a class, per the two-tier rule (§5)."""
-    if not components:
-        # Root itself is the class -> its own plant group.
-        name = os.path.basename(os.path.normpath(root)) or root
-        return _plant_from_flat_name(name)
-    if len(components) > 1:
+    if len(components) == 2:
         return components[0]
-    return _plant_from_flat_name(components[0])
+    return _plant_from_flat_name(class_label(components, root))
 
 
 def _plant_from_flat_name(name: str) -> str:
-    """
-    Plant token = substring before first '_' or '-'; whole name if neither.
-    """
     for sep in ("_", "-"):
         idx = name.find(sep)
         if idx > 0:
@@ -169,26 +96,16 @@ def group_by_plant(
     classes: Dict[Tuple[str, ...], int],
     root: str,
 ) -> Dict[str, Dict[str, int]]:
-    """
-    Group discovered classes by plant. Returns {plant: {display_label: count}}.
-    """
     groups: Dict[str, Dict[str, int]] = {}
-    for components, count in classes.items():
-        plant = _plant_of(components, root)
-        label = _flatten_label(components, root)
+    for key, count in classes.items():
+        plant = _plant_of(key, root)
+        label = class_label(key, root)
         bucket = groups.setdefault(plant, {})
-        if label in bucket:
-            # Should be impossible (relative paths are unique);
-            raise ValueError(f"Duplicate class label detected: {label}")
         bucket[label] = count
     return groups
 
 
-# ---------------------------------------------------------------------------
-# Charting
-# ---------------------------------------------------------------------------
 def make_charts(plant: str, class_counts: Dict[str, int]) -> plt.Figure:
-    """Build one figure with a pie + bar chart for a single plant group."""
     labels = sorted(class_counts.keys())
     counts = [class_counts[name] for name in labels]
     cmap = plt.get_cmap("tab10")
@@ -226,55 +143,7 @@ def make_charts(plant: str, class_counts: Dict[str, int]) -> plt.Figure:
     return fig
 
 
-_NON_INTERACTIVE_BACKENDS = {
-    "agg", "cairo", "pdf", "pgf", "ps", "svg", "template",
-}
-
-
-def _backend_is_interactive() -> bool:
-    """True if the active matplotlib backend can actually display a window."""
-    try:
-        backend = matplotlib.get_backend().lower()
-        return backend not in _NON_INTERACTIVE_BACKENDS
-    except Exception:  # noqa: BLE001
-        return False
-
-
-def _save_figures(figures: List[Tuple[str, "plt.Figure"]]) -> None:
-    """
-    Save each figure as `<plant>_distribution.png` in the current directory.
-    """
-    for plant, fig in figures:
-        out = f"{plant}_distribution.png"
-        try:
-            fig.savefig(out, bbox_inches="tight")
-            print(f"Saved {out}")
-        except Exception as exc:  # noqa: BLE001
-            print(f"Warning: could not save {out}: {exc}", file=sys.stderr)
-
-
-def show_or_save(figures: List[Tuple[str, "plt.Figure"]]) -> None:
-    """
-    Display figures if possible, otherwise save them to disk.
-    """
-    if not _backend_is_interactive():
-        _save_figures(figures)
-        return
-    try:
-        plt.show()
-    except Exception as exc:  # noqa: BLE001
-        print(
-            f"Display unavailable ({exc}); saving figures instead.",
-            file=sys.stderr,
-        )
-        _save_figures(figures)
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 def parse_args(argv: List[str]) -> argparse.Namespace:
-    """Parse CLI args. Exits cleanly (no traceback) on validation failure."""
     parser = argparse.ArgumentParser(
         prog="Distribution.py",
         description=(
@@ -289,54 +158,30 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
             "Dataset directory (flat or nested layout, or a single class dir)."
         ),
     )
-    try:
-        args = parser.parse_args(argv[1:])
-    except SystemExit as exc:
-        # argparse already printed a clean message; propagate its code.
-        raise SystemExit(exc.code)
 
+    args = parser.parse_args(argv[1:])
     if not os.path.exists(args.directory):
-        print(f"Error: path does not exist: {args.directory}", file=sys.stderr)
-        raise SystemExit(1)
+        parser.error(f"path does not exist: {args.directory}")
     if not os.path.isdir(args.directory):
-        print(f"Error: not a directory: {args.directory}", file=sys.stderr)
-        raise SystemExit(1)
+        parser.error(f"not a directory: {args.directory}")
     return args
 
 
 def main(argv: List[str]) -> int:
-    """Program entry point."""
-    try:
-        args = parse_args(argv)
-    except SystemExit as exc:
-        return int(exc.code) if exc.code is not None else 0
+    args = parse_args(argv)
 
     try:
         classes = discover_classes(args.directory)
-    except Exception as exc:  # noqa: BLE001
-        print(f"Error during discovery: {exc}", file=sys.stderr)
-        return 1
-
-    if not classes:
-        print(
-            f"Error: no class directories with images found under "
-            f"{args.directory}",
-            file=sys.stderr,
-        )
-        return 1
-
-    try:
-        groups = group_by_plant(classes, args.directory)
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    figures: List[Tuple[str, plt.Figure]] = []
-    for plant in sorted(groups.keys()):
-        fig = make_charts(plant, groups[plant])
-        figures.append((plant, fig))
+    groups = group_by_plant(classes, args.directory)
 
-    show_or_save(figures)
+    for plant in sorted(groups):
+        make_charts(plant, groups[plant])
+
+    plt.show()
     return 0
 
 
@@ -346,3 +191,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Interrupted.", file=sys.stderr)
         sys.exit(130)
+    except Exception as exc:
+        print(f"Error: unexpected failure: {exc}", file=sys.stderr)
+        sys.exit(1)
