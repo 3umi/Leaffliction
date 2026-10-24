@@ -1,7 +1,7 @@
 numpy
 matplotlib
 opencv-python
-albumentations>=2.0
+albumentations==2.0.8
 plantcv>=4.0
 scikit-learn
 torch
