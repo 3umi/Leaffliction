@@ -17,8 +17,10 @@ from utils.images import list_images
 
 
 OUTPUT_DIR = "augmented_directory"
-MAX_PAIR_COUNT = 3
-MAX_REROLLS = 50
+
+def _output_name(src: str, aug_name: str) -> str:
+    stem, ext = os.path.splitext(os.path.basename(src))
+    return f"{stem}_{aug_name}{ext}"
 
 
 def _class_dir(root: str, components: Tuple[str, ...]) -> str:
@@ -38,23 +40,12 @@ def _save_rgb(path: str, image: np.ndarray) -> None:
         raise OSError(f"failed to write {path}")
 
 
-def _weighted_choice(
-    sources: List[str],
-    used: Dict[str, int],
-    rng: random.Random,
-) -> str:
-    """Pick a source weighted by 1 / (1 + used_count)."""
-    weights = [1.0 / (1 + used.get(s, 0)) for s in sources]
-    return rng.choices(sources, weights=weights, k=1)[0]
-
-
 def _print_plan(counts, target):
+    print(f"{'class':<16} {'images':>6} {'to add':>7}")
     for label in sorted(counts):
         n = counts[label]
-        if n >= target:
-            print(f"{label}: {n} (at target)")
-        else:
-            print(f"{label}: {n} → {target} (+{target - n} augmented)")
+        print(f"{label:<16} {n:>6} {target - n:>+7}")
+    print(f"target: {target} images per class")
 
 
 def _generate_for_class(
@@ -64,64 +55,39 @@ def _generate_for_class(
     dest_dir: str,
     rng: random.Random,
 ) -> Tuple[int, int]:
-    used: Dict[str, int] = {}
-    pair: Dict[Tuple[str, str], int] = {}
-    technique_idx: Dict[str, int] = {}
     successes = 0
     failures = 0
 
-    for _ in range(needed):
-        src = ""
-        aug_name = ""
-        found = False
-        for _attempt in range(MAX_REROLLS):
-            src = _weighted_choice(sources, used, rng)
-            aug_name = rng.choice(augmentations.AUGMENTATION_NAMES)
-            if pair.get((src, aug_name), 0) < MAX_PAIR_COUNT:
-                found = True
-                break
-        if not found:
-            print(
-                f"Warning: could not find a fresh (source, augmentation) "
-                f"pair for {label} after {MAX_REROLLS} rerolls; skipping.",
-                file=sys.stderr,
-            )
-            failures += 1
-            continue
+    taken = {os.path.basename(s) for s in sources}
+    pairs = [
+        (source, aug)
+        for source in sources
+        for aug in augmentations.AUGMENTATION_NAMES
+        if _output_name(source, aug) not in taken
+    ]
 
+    if needed > len(pairs):
+        print(f"Warning: {label}: only {len(pairs)} unique augmentations "
+              f"possible, {needed - len(pairs)} short of the target",
+              file=sys.stderr)
+        failures = needed - len(pairs)
+        needed = len(pairs)
+
+    rng.shuffle(pairs)
+
+    for src, aug_name in pairs[:needed]:
         try:
             image = _load_rgb(src)
-            aug_seed = rng.getrandbits(63)
-            out_img = augmentations.apply(aug_name, image, seed=aug_seed)
-        except Exception as exc:  # noqa: BLE001
-            print(
-                f"Warning: failed to augment {src} with "
-                f"{aug_name}: {exc}",
-                file=sys.stderr,
-            )
+            out_img = augmentations.apply(aug_name, image,
+                                          seed=rng.getrandbits(63))
+            stem, ext = os.path.splitext(os.path.basename(src))
+            _save_rgb(os.path.join(dest_dir, f"{stem}_{aug_name}{ext}"),
+                      out_img)
+            successes += 1
+        except (ValueError, OSError) as exc:
+            print(f"Warning: {label}: {src} + {aug_name}: {exc}",
+                  file=sys.stderr)
             failures += 1
-            continue
-
-        base = os.path.basename(src)
-        stem, ext = os.path.splitext(base)
-        idx = technique_idx.get(aug_name, 0) + 1
-        technique_idx[aug_name] = idx
-        out_name = f"{stem}_{aug_name}_{idx:04d}{ext}"
-        out_path = os.path.join(dest_dir, out_name)
-        try:
-            _save_rgb(out_path, out_img)
-        except (IOError, OSError) as exc:
-            print(
-                f"Warning: failed to save {out_path}: {exc}",
-                file=sys.stderr,
-            )
-            failures += 1
-            continue
-
-        used[src] = used.get(src, 0) + 1
-        pair[(src, aug_name)] = pair.get((src, aug_name), 0) + 1
-        successes += 1
-
     return successes, failures
 
 
@@ -251,20 +217,14 @@ def main(argv: List[str]) -> int:
         needed = target - copied
 
         if needed <= 0:
-            print(f"[{label}] at target ({len(sources)}).")
             continue
 
-        print(
-            f"[{label}] generating {needed} augmentations from "
-            f"{len(sources)} sources..."
-        )
         successes, failures = _generate_for_class(
             label, sources, needed, dest_dir, rng,
         )
         total_failures += failures
-        print(
-            f"[{label}] done: {successes} created, {failures} failed."
-        )
+        print(f"{label}: {successes} created"
+              + (f", {failures} FAILED" if failures else ""))
 
     elapsed = time.time() - start
     print(f"Total time: {elapsed:.1f}s, total failures: {total_failures}.")
