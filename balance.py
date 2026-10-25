@@ -22,9 +22,6 @@ MAX_REROLLS = 50
 
 
 def _class_dir(root: str, components: Tuple[str, ...]) -> str:
-    """Absolute directory holding the source images for a class."""
-    if not components:
-        return root
     return os.path.join(root, *components)
 
 
@@ -134,13 +131,12 @@ def _generate_for_class(
 
 
 def _copy_originals(sources: List[str], dest_dir: str) -> int:
-    """Copy every source file into dest_dir. Returns count copied."""
     copied = 0
     for src in sources:
         try:
             shutil.copy2(src, os.path.join(dest_dir, os.path.basename(src)))
             copied += 1
-        except (IOError, OSError) as exc:
+        except OSError as exc:
             print(
                 f"Warning: failed to copy {src}: {exc}",
                 file=sys.stderr,
@@ -256,9 +252,10 @@ def main(argv: List[str]) -> int:
             )
             return 1
 
-        _copy_originals(sources, dest_dir)
+        copied = _copy_originals(sources, dest_dir)
+        total_failures += len(sources) - copied
+        needed = target - copied
 
-        needed = target - len(sources)
         if needed <= 0:
             print(f"[{label}] at target ({len(sources)}).")
             continue
