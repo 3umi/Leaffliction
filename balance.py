@@ -34,9 +34,8 @@ def _load_rgb(path: str) -> np.ndarray:
 
 def _save_rgb(path: str, image: np.ndarray) -> None:
     bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    ok = cv2.imwrite(path, bgr)
-    if not ok:
-        raise IOError(f"failed to write {path}")
+    if not cv2.imwrite(path, bgr):
+        raise OSError(f"failed to write {path}")
 
 
 def _weighted_choice(
@@ -65,10 +64,6 @@ def _generate_for_class(
     dest_dir: str,
     rng: random.Random,
 ) -> Tuple[int, int]:
-    """Generate `needed` augmentations into `dest_dir`.
-
-    Returns (success_count, failure_count).
-    """
     used: Dict[str, int] = {}
     pair: Dict[Tuple[str, str], int] = {}
     technique_idx: Dict[str, int] = {}
@@ -165,8 +160,8 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     parser.add_argument(
         "--seed",
         type=int,
-        default=None,
-        help="RNG seed for reproducibility (default: time-based).",
+        default=42,
+        help="Random seed - the same seed gives identical output (default: 42).",
     )
     args = parser.parse_args(argv[1:])
 
@@ -212,8 +207,7 @@ def main(argv: List[str]) -> int:
         )
         return 1
 
-    seed = args.seed if args.seed is not None else int(time.time())
-    rng = random.Random(seed)
+    rng = random.Random(args.seed)
 
     label_to_components: Dict[str, Tuple[str, ...]] = {
         class_label(c, args.directory): c for c in classes
