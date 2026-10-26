@@ -81,7 +81,6 @@ def _generate_for_class(
             image = _load_rgb(src)
             out_img = augmentations.apply(aug_name, image,
                                           seed=rng.getrandbits(63))
-            stem, ext = os.path.splitext(os.path.basename(src))
             _save_rgb(os.path.join(dest_dir, _output_name(src, aug_name)),
                       out_img)
             successes += 1
