@@ -18,6 +18,7 @@ from utils.images import list_images
 
 OUTPUT_DIR = "augmented_directory"
 
+
 def _output_name(src: str, aug_name: str) -> str:
     stem, ext = os.path.splitext(os.path.basename(src))
     return f"{stem}_{aug_name}{ext}"
@@ -81,7 +82,7 @@ def _generate_for_class(
             out_img = augmentations.apply(aug_name, image,
                                           seed=rng.getrandbits(63))
             stem, ext = os.path.splitext(os.path.basename(src))
-            _save_rgb(os.path.join(dest_dir, f"{stem}_{aug_name}{ext}"),
+            _save_rgb(os.path.join(dest_dir, _output_name(src, aug_name)),
                       out_img)
             successes += 1
         except (ValueError, OSError) as exc:
@@ -127,7 +128,8 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         "--seed",
         type=int,
         default=42,
-        help="Random seed - the same seed gives identical output (default: 42).",
+        help="Random seed - the same seed gives "
+             "identical output (default: 42).",
     )
     args = parser.parse_args(argv[1:])
 
