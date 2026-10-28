@@ -155,8 +155,10 @@ def main(argv: list) -> int:
     args = parse_args(argv)
 
     try:
-        train_originals, X_val, train_original_labels, y_val = _split_originals(args.directory,
-                                                        seed=SEED)
+        (train_originals, X_val,
+         train_original_labels, y_val) = _split_originals(
+            args.directory, seed=SEED,
+        )
     except (ValueError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -187,9 +189,11 @@ def main(argv: list) -> int:
         return 1
 
     torch.manual_seed(SEED)
-    device = ("cuda" if torch.cuda.is_available()
-            else "mps" if torch.backends.mps.is_available()
-            else "cpu")
+    device = (
+        "cuda" if torch.cuda.is_available()
+        else "mps" if torch.backends.mps.is_available()
+        else "cpu"
+    )
     train_paths, train_labels = _list_train_set(TRAIN_DIR)
     class_names = sorted(set(train_labels))
     train_loader = DataLoader(
@@ -208,13 +212,14 @@ def main(argv: list) -> int:
                                 optimizer, device)
         acc = _evaluate(model, val_loader, device)
         print(f"epoch {epoch:2d}  train loss {loss:.3f}  "
-                f"val accuracy {acc:.1%}")
+              f"val accuracy {acc:.1%}")
     torch.save({
         "state_dict": model.state_dict(),
         "class_names": class_names,
     }, MODEL_PATH)
     print(f"Saved model to {MODEL_PATH}")
     return 0
+
 
 if __name__ == "__main__":
     try:
