@@ -105,6 +105,10 @@ def main(argv: list) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
+    if len(set(y_train)) < 2:
+        print("Error: training needs at least 2 classes.", file=sys.stderr)
+        return 1
+
     if os.path.exists(TRAIN_DIR):
         print(
             f"Error: training directory exists at {TRAIN_DIR}; remove "
