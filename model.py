@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+import torch.nn as nn
+
 
 IMG_SIZE = 128
 
@@ -29,3 +31,39 @@ class LeafDataset(Dataset):
 
     def __getitem__(self, i):
         return preprocess(self.paths[i]), self.targets[i]
+
+
+class LeafCNN(nn.Module):
+    """4 conv blocks (pattern finders) + a linear classifier."""
+
+    def __init__(self, num_classes: int):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=16,
+                      kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(in_channels=16, out_channels=32,
+                      kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(in_channels=32, out_channels=64,
+                      kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(in_channels=64, out_channels=128,
+                      kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2)
+        )
+        self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(128, num_classes)
+        )
+
+    def forward(self, x):
+        return self.classifier(self.features(x))
