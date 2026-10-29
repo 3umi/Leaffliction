@@ -49,7 +49,7 @@ def _print_plan(counts, target):
     print(f"target: {target} images per class")
 
 
-def _generate_for_class(
+def generate_for_class(
     label: str,
     sources: List[str],
     needed: int,
@@ -91,7 +91,7 @@ def _generate_for_class(
     return successes, failures
 
 
-def _copy_originals(sources: List[str], dest_dir: str) -> int:
+def copy_originals(sources: List[str], dest_dir: str) -> int:
     copied = 0
     for src in sources:
         try:
@@ -166,13 +166,7 @@ def main(argv: List[str]) -> int:
     if args.dry_run:
         return 0
 
-    if os.path.exists(OUTPUT_DIR):
-        print(
-            f"Error: output directory exists at {OUTPUT_DIR}; remove "
-            f"it first or use a different working directory.",
-            file=sys.stderr,
-        )
-        return 1
+    shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
 
     rng = random.Random(args.seed)
 
@@ -213,14 +207,14 @@ def main(argv: List[str]) -> int:
             )
             return 1
 
-        copied = _copy_originals(sources, dest_dir)
+        copied = copy_originals(sources, dest_dir)
         total_failures += len(sources) - copied
         needed = target - copied
 
         if needed <= 0:
             continue
 
-        successes, failures = _generate_for_class(
+        successes, failures = generate_for_class(
             label, sources, needed, dest_dir, rng,
         )
         total_failures += failures

@@ -1,6 +1,7 @@
 *.pdf
 images/
 augmented_directory/
+train_directory/
 *_augmented/
 dst_directory/
 dataset.zip
@@ -34,3 +35,4 @@ env/
 
 en.subject.pdf
 tests/
+*.zip
