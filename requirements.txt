@@ -1,6 +1,5 @@
 numpy
 matplotlib
-opencv-python==4.11.0.86
 opencv-python-headless==4.11.0.86
 albumentations==2.0.8
 plantcv>=4.0
