@@ -166,13 +166,7 @@ def main(argv: List[str]) -> int:
     if args.dry_run:
         return 0
 
-    if os.path.exists(OUTPUT_DIR):
-        print(
-            f"Error: output directory exists at {OUTPUT_DIR}; remove "
-            f"it first or use a different working directory.",
-            file=sys.stderr,
-        )
-        return 1
+    shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
 
     rng = random.Random(args.seed)
 
