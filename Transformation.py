@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""Part 3 — Image transformation pipeline using PlantCV.
-
-Single-image mode:
-    ./Transformation.py <image_path>
-    Displays 6 image panels + color histogram.
-
-Batch mode:
-    ./Transformation.py -src <source_dir> -dst <dest_dir> [-mask]
-    Saves all transformation images to dest_dir.
-"""
 import argparse
 import os
 import sys
@@ -17,33 +7,27 @@ from typing import List
 import io
 
 import cv2
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from plantcv import plantcv as pcv
 
 from utils.images import list_images
 
-# ---------------------------------------------------------------------------
-# Color histogram helper
-# ---------------------------------------------------------------------------
-
 
 def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """Compute a 9-channel color histogram and return it as an RGB array."""
     channels = [
-        ("red",           img[:, :, 0]),
+        ("blue",           img[:, :, 0]),
         ("green",         img[:, :, 1]),
-        ("blue",          img[:, :, 2]),
-        ("hue",           cv2.cvtColor(img, cv2.COLOR_RGB2HSV)[:, :, 0]),
-        ("saturation",    cv2.cvtColor(img, cv2.COLOR_RGB2HSV)[:, :, 1]),
-        ("value",         cv2.cvtColor(img, cv2.COLOR_RGB2HSV)[:, :, 2]),
-        ("lightness",     cv2.cvtColor(img, cv2.COLOR_RGB2LAB)[:, :, 0]),
-        ("green-magenta", cv2.cvtColor(img, cv2.COLOR_RGB2LAB)[:, :, 1]),
-        ("blue-yellow",   cv2.cvtColor(img, cv2.COLOR_RGB2LAB)[:, :, 2]),
+        ("red",          img[:, :, 2]),
+        ("hue",           cv2.cvtColor(img, cv2.COLOR_BGR2HSV)[:, :, 0]),
+        ("saturation",    cv2.cvtColor(img, cv2.COLOR_BGR2HSV)[:, :, 1]),
+        ("value",         cv2.cvtColor(img, cv2.COLOR_BGR2HSV)[:, :, 2]),
+        ("lightness",     cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:, :, 0]),
+        ("green-magenta", cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:, :, 1]),
+        ("blue-yellow",   cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:, :, 2]),
     ]
     colors = [
-        "red", "green", "blue", "goldenrod", "gray",
+        "blue", "green", "red", "goldenrod", "gray",
         "black", "purple", "magenta", "cyan",
     ]
     fig, ax = plt.subplots(figsize=(8, 4))
@@ -63,8 +47,7 @@ def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
     plt.close(fig)
     buf.seek(0)
-    arr = cv2.imdecode(np.frombuffer(buf.read(), np.uint8), cv2.IMREAD_COLOR)
-    return cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
+    return cv2.imdecode(np.frombuffer(buf.read(), np.uint8), cv2.IMREAD_COLOR)
 
 
 # ---------------------------------------------------------------------------
@@ -233,10 +216,6 @@ def _pipeline(img: np.ndarray) -> dict:
 # ---------------------------------------------------------------------------
 
 def _show(results: dict) -> None:
-    """Display 6 image panels in one window, histogram in a second."""
-    backend = matplotlib.get_backend().lower()
-    non_interactive = {"agg", "cairo", "pdf", "pgf", "ps", "svg", "template"}
-
     image_keys = [k for k in results if k != "Color histogram"]
     n = len(image_keys)
     cols = 3
@@ -249,7 +228,7 @@ def _show(results: dict) -> None:
         if img.ndim == 2:
             ax.imshow(img, cmap="gray")
         else:
-            ax.imshow(img)
+            ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         ax.set_title(key)
         ax.axis("on")
 
@@ -260,40 +239,23 @@ def _show(results: dict) -> None:
 
     if "Color histogram" in results:
         fig2, ax2 = plt.subplots(figsize=(8, 5))
-        ax2.imshow(results["Color histogram"])
+        ax2.imshow(cv2.cvtColor(results["Color histogram"], cv2.COLOR_BGR2RGB))
         ax2.set_title("Color histogram")
         ax2.axis("off")
         fig2.tight_layout()
 
-    if backend in non_interactive:
-        fig.savefig("transformation_result.png", bbox_inches="tight")
-        print("No display available; saved panels to "
-              "transformation_result.png")
-        if "Color histogram" in results:
-            fig2.savefig("transformation_histogram.png", bbox_inches="tight")
-            print("Saved histogram to transformation_histogram.png")
-    else:
-        plt.show()
+    plt.show()
 
 
 def _save(results: dict, stem: str, dest_dir: str,
           include: set = None) -> None:
-    """Save each panel as <dest_dir>/<stem>_<label>.png.
-
-    If `include` is given, only save panels whose title is in the set;
-    otherwise save every panel.
-    """
     for key in results:
         if include is not None and key not in include:
             continue
         img = results[key]
         label = key.lower().replace(" ", "_")
         out_path = os.path.join(dest_dir, f"{stem}_{label}.png")
-        if img.ndim == 2:
-            bgr = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        else:
-            bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        if not cv2.imwrite(out_path, bgr):
+        if not cv2.imwrite(out_path, img):
             print(f"Warning: failed to write {out_path}", file=sys.stderr)
         else:
             print(f"Saved {out_path}")
