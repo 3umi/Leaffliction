@@ -4,6 +4,7 @@ import sys
 import os
 import argparse
 import zipfile
+import shutil
 from typing import Tuple, List, Dict
 
 import torch
@@ -178,13 +179,7 @@ def main(argv: list) -> int:
         print("Error: training needs at least 2 classes.", file=sys.stderr)
         return 1
 
-    if os.path.exists(TRAIN_DIR):
-        print(
-            f"Error: training directory exists at {TRAIN_DIR}; remove "
-            f"it first or use a different working directory.",
-            file=sys.stderr,
-        )
-        return 1
+    shutil.rmtree(TRAIN_DIR, ignore_errors=True)
 
     rng = random.Random(SEED)
 
