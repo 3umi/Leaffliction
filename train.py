@@ -3,6 +3,7 @@ import random
 import sys
 import os
 import argparse
+import zipfile
 from typing import Tuple, List, Dict
 
 import torch
@@ -21,6 +22,7 @@ BATCH_SIZE = 32
 EPOCHS = 30
 LEARNING_RATE = 0.001
 MODEL_PATH = "model.pt"
+ZIP_PATH = "leaffliction.zip"
 
 
 def _split_originals(
@@ -151,6 +153,15 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return args
 
 
+def _make_zip(zip_path: str) -> None:
+    paths, _ = _list_train_set(TRAIN_DIR)
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(MODEL_PATH)
+        for path in paths:
+            zf.write(path)
+    print(f"Saved {zip_path}")
+
+
 def main(argv: list) -> int:
     args = parse_args(argv)
 
@@ -217,7 +228,7 @@ def main(argv: list) -> int:
         "state_dict": model.state_dict(),
         "class_names": class_names,
     }, MODEL_PATH)
-    print(f"Saved model to {MODEL_PATH}")
+    _make_zip(ZIP_PATH)
     return 0
 
 

@@ -37,3 +37,4 @@ en.subject.pdf
 tests/
 test.py
 train_log*.txt
+*.zip
