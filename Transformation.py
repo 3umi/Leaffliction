@@ -329,8 +329,8 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("image", nargs="?", help="Single image path.")
-    parser.add_argument("-src", dest="src", help="Source directory (batch).")
-    parser.add_argument("-dst", dest="dst", help="Dest directory (batch).")
+    parser.add_argument("-src", help="Source directory (batch).")
+    parser.add_argument("-dst", help="Dest directory (batch).")
     for flag, key in FLAG_TO_KEY.items():
         parser.add_argument(
             f"-{flag}", action="store_true",
@@ -340,24 +340,21 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
 
     if args.image and (args.src or args.dst):
         parser.error("Provide either a single image or -src/-dst, not both.")
+    if args.image and any(getattr(args, f) for f in FLAG_TO_KEY):
+        parser.error("panel flags (-mask, -roi, ...) only work with -src/-dst.")
     if bool(args.src) != bool(args.dst):
         parser.error("-src and -dst must be used together.")
     if not args.image and not args.src:
-        parser.print_help(sys.stderr)
-        raise SystemExit(1)
+        parser.error("give an image path, or -src and -dst.")
     return args
 
 
 def main(argv: List[str]) -> int:
-    try:
-        args = parse_args(argv)
-    except SystemExit as exc:
-        return int(exc.code) if exc.code is not None else 0
+    args = parse_args(argv)
 
     if args.image:
         return run_single(args.image)
-    # Panel filter: if any -blur/-mask/... flag is set, save only those +
-    # the Original. Otherwise save every panel (backward-compatible default).
+
     selected = {FLAG_TO_KEY[f] for f in FLAG_TO_KEY if getattr(args, f)}
     include = ({"Original"} | selected) if selected else None
     return run_batch(args.src, args.dst, include=include)
