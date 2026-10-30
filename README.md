@@ -16,7 +16,9 @@ pip install -r requirements.txt
 - `Augmentation.py <image>` — 6 augmentations (Part 2)
 - `Transformation.py <image | -src DIR -dst DIR>` — image transformations (Part 3)
 - `train.py <dir>` — train classifier (Part 4)
-- `predict.py <image>` — predict disease (Part 4)
+- `predict.py <image | dir> [-val]` — predict disease for an image, or print
+  accuracy over a directory; `predict.py images/ -val` scores the validation
+  split held out by `train.py` (Part 4)
 
 ## Dataset
 
