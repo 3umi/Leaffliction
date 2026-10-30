@@ -153,7 +153,6 @@ def _pipeline(img: np.ndarray) -> dict:
 
     analyze_img = pcv.analyze.size(img=img, labeled_mask=binary, n_labels=1)
 
-    # 7. Pseudolandmarks
     top, bottom, center_v = pcv.homology.x_axis_pseudolandmarks(
         img=img, mask=binary
     )
@@ -162,12 +161,12 @@ def _pipeline(img: np.ndarray) -> dict:
     )
     lm_img = img.copy()
     for pts, color in [
-        (top, (0, 0, 255)),
-        (bottom, (255, 0, 255)),
-        (center_v, (255, 165, 0)),
-        (left, (255, 165, 0)),
-        (right, (255, 165, 0)),
-        (center_h, (255, 0, 255)),
+        (top,      (255, 0, 0)),
+        (right,    (255, 0, 0)),
+        (bottom,   (255, 0, 255)),
+        (left,     (255, 0, 255)),
+        (center_v, (0, 165, 255)),
+        (center_h, (0, 165, 255)),
     ]:
         for pt in pts:
             cv2.circle(lm_img, (int(pt[0][0]), int(pt[0][1])), 3, color, -1)
