@@ -135,11 +135,11 @@ def _pipeline(img: np.ndarray) -> dict:
     binary = _close_mask(_segment_leaf(img))
 
     gray_hsv = pcv.rgb2gray_hsv(rgb_img=img, channel="s")
+    gray_hsv[binary == 0] = 0
     blurred = pcv.gaussian_blur(img=gray_hsv, ksize=(5, 5), sigma_x=0)
 
     masked = pcv.apply_mask(img=img, mask=binary, mask_color="white")
 
-    # 5. ROI objects visualisation (green fill + blue bounding rect)
     roi_img = img.copy()
     green_overlay = np.zeros_like(roi_img)
     green_overlay[binary > 0] = (0, 255, 0)
@@ -151,15 +151,7 @@ def _pipeline(img: np.ndarray) -> dict:
         x0, y0, bw, bh = cv2.boundingRect(np.vstack(cnts))
         cv2.rectangle(roi_img, (x0, y0), (x0 + bw, y0 + bh), (255, 0, 0), 2)
 
-    # 6. Analyze object — shape overlay (hull, axes, centroid)
-    # PlantCV draws with BGR color values, so convert to BGR first so its
-    # (255,0,0) perimeter renders as blue (not red) and (255,0,255) hull/axes
-    # render as magenta, matching subject figure IV.5.
-    bgr_for_analyze = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    analyze_result = pcv.analyze.size(
-        img=bgr_for_analyze, labeled_mask=binary, n_labels=1
-    )
-    analyze_img = cv2.cvtColor(analyze_result, cv2.COLOR_BGR2RGB)
+    analyze_img = pcv.analyze.size(img=img, labeled_mask=binary, n_labels=1)
 
     # 7. Pseudolandmarks
     top, bottom, center_v = pcv.homology.x_axis_pseudolandmarks(
