@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from plantcv import plantcv as pcv
 
-from utils.images import list_images
+from utils.images import is_image, list_images
 
 
 def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -127,46 +127,29 @@ def _isolate_leaf(binary: np.ndarray) -> np.ndarray:
     return np.where(labels == largest, 255, 0).astype(np.uint8)
 
 
-# ---------------------------------------------------------------------------
-# PlantCV pipeline
-# ---------------------------------------------------------------------------
-
 def _pipeline(img: np.ndarray) -> dict:
-    """Run the full PlantCV transformation pipeline on an RGB image.
 
-    Returns a dict of named result images/figures.
-    """
     pcv.params.debug = None
     pcv.params.verbose = False
 
-    # 1. Segment the leaf — tries LAB-a first, falls back to LAB-b if the
-    #    Color augmentation shifted the leaf away from green, then closes
-    #    small internal holes from vein highlights.
     binary = _close_mask(_segment_leaf(img))
-    # "Gaussian blur" panel: actual blur of the HSV-s channel, matching the
-    # texture visible in subject figure IV.2 (not the binary mask).
+
     gray_hsv = pcv.rgb2gray_hsv(rgb_img=img, channel="s")
     blurred = pcv.gaussian_blur(img=gray_hsv, ksize=(5, 5), sigma_x=0)
 
-    # 3. Apply mask to original
     masked = pcv.apply_mask(img=img, mask=binary, mask_color="white")
-
-    # 4. ROI — full image rectangle
-    h, w = img.shape[:2]
-    roi = pcv.roi.rectangle(img=img, x=0, y=0, h=h, w=w)
-    filtered_mask = pcv.roi.filter(mask=binary, roi=roi, roi_type="partial")
 
     # 5. ROI objects visualisation (green fill + blue bounding rect)
     roi_img = img.copy()
     green_overlay = np.zeros_like(roi_img)
-    green_overlay[filtered_mask > 0] = (0, 255, 0)
+    green_overlay[binary > 0] = (0, 255, 0)
     roi_img = cv2.addWeighted(roi_img, 0.6, green_overlay, 0.4, 0)
     cnts, _ = cv2.findContours(
-        filtered_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
     if cnts:
         x0, y0, bw, bh = cv2.boundingRect(np.vstack(cnts))
-        cv2.rectangle(roi_img, (x0, y0), (x0 + bw, y0 + bh), (0, 0, 255), 2)
+        cv2.rectangle(roi_img, (x0, y0), (x0 + bw, y0 + bh), (255, 0, 0), 2)
 
     # 6. Analyze object — shape overlay (hull, axes, centroid)
     # PlantCV draws with BGR color values, so convert to BGR first so its
@@ -174,16 +157,16 @@ def _pipeline(img: np.ndarray) -> dict:
     # render as magenta, matching subject figure IV.5.
     bgr_for_analyze = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     analyze_result = pcv.analyze.size(
-        img=bgr_for_analyze, labeled_mask=filtered_mask, n_labels=1
+        img=bgr_for_analyze, labeled_mask=binary, n_labels=1
     )
     analyze_img = cv2.cvtColor(analyze_result, cv2.COLOR_BGR2RGB)
 
     # 7. Pseudolandmarks
     top, bottom, center_v = pcv.homology.x_axis_pseudolandmarks(
-        img=img, mask=filtered_mask
+        img=img, mask=binary
     )
     left, right, center_h = pcv.homology.y_axis_pseudolandmarks(
-        img=img, mask=filtered_mask
+        img=img, mask=binary
     )
     lm_img = img.copy()
     for pts, color in [
@@ -198,7 +181,7 @@ def _pipeline(img: np.ndarray) -> dict:
             cv2.circle(lm_img, (int(pt[0][0]), int(pt[0][1])), 3, color, -1)
 
     # 8. Color histogram — 9 channels across RGB, HSV, LAB
-    hist_arr = _color_histogram(img, filtered_mask)
+    hist_arr = _color_histogram(img, binary)
 
     return {
         "Original": img,
@@ -261,16 +244,11 @@ def _save(results: dict, stem: str, dest_dir: str,
             print(f"Saved {out_path}")
 
 
-# ---------------------------------------------------------------------------
-# Single-image and batch modes
-# ---------------------------------------------------------------------------
-
-
 def run_single(image_path: str) -> int:
-    if not os.path.isfile(image_path):
-        print(f"Error: file not found: {image_path}", file=sys.stderr)
+    if not os.path.isfile(image_path) or not is_image(image_path):
+        print("Error: not an image file (.jpg/.jpeg/.png)", file=sys.stderr)
         return 1
-    img, _, _ = pcv.readimage(filename=image_path)
+    img, _, _ = pcv.readimage(filename=image_path, mode="rgb")
     results = _pipeline(img)
     _show(results)
     return 0
@@ -312,10 +290,6 @@ def run_batch(src_dir: str, dst_dir: str,
 
     return 0 if errors == 0 else 1
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -365,3 +339,6 @@ if __name__ == "__main__":
         sys.exit(main(sys.argv))
     except KeyboardInterrupt:
         sys.exit(130)
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
