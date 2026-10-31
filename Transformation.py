@@ -139,7 +139,6 @@ def _show(results: dict) -> None:
         else:
             ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         ax.set_title(key)
-        ax.axis("on")
 
     for ax in axes[n:]:
         ax.set_visible(False)
