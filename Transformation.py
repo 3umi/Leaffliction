@@ -49,26 +49,11 @@ def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(pixels, cv2.COLOR_RGBA2BGR) 
 
 def _segment_leaf(img: np.ndarray) -> np.ndarray:
-    """Segment the leaf from the background.
-
-    Computes three candidate masks and picks the largest plausible one:
-      * LAB-a/dark:   isolates green leaves (originals + most cases)
-      * LAB-b/light:  isolates yellow/brown leaves (Color augmentation)
-      * LAB-L<253:    isolates any non-pure-white pixel (Lighting
-                      augmentation bleaches the leaf near L=255)
-
-    L<253 gives 0% on normal images (backgrounds aren't overexposed) but
-    dominates when the Lighting augmentation blows out the highlights,
-    which fragments the LAB triangle-threshold masks into swiss cheese.
-    Picking the largest non-degenerate candidate handles all three cases
-    without any per-augmentation branching.
-    """
     candidates = []
     for channel, otype in (("a", "dark"), ("b", "light")):
         gray = pcv.rgb2gray_lab(rgb_img=img, channel=channel)
         gray = pcv.gaussian_blur(img=gray, ksize=(5, 5), sigma_x=0)
         m = pcv.threshold.triangle(gray_img=gray, object_type=otype)
-        m = pcv.fill(bin_img=m, size=200)
         candidates.append(_isolate_leaf(m))
 
     plausible = [c for c in candidates if 0.05 <= (c > 0).mean() <= 0.90]
