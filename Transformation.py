@@ -206,7 +206,7 @@ def run_batch(src_dir: str, dst_dir: str,
         filename = os.path.basename(path)
         stem = os.path.splitext(filename)[0]
         try:
-            img, _, _ = pcv.readimage(filename=path)
+            img, _, _ = pcv.readimage(filename=path, mode="rgb")
             results = _pipeline(img)
             _save(results, stem, dst_dir, include=include)
         except Exception as exc:  # noqa: BLE001
