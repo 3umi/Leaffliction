@@ -42,12 +42,11 @@ def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     ax.set_ylabel("Proportion of pixels (%)")
     ax.legend(fontsize=7, ncol=3)
     fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
+    
+    fig.canvas.draw()
+    pixels = np.asarray(fig.canvas.buffer_rgba())
     plt.close(fig)
-    buf.seek(0)
-    return cv2.imdecode(np.frombuffer(buf.read(), np.uint8), cv2.IMREAD_COLOR)
+    return cv2.cvtColor(pixels, cv2.COLOR_RGBA2BGR) 
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +170,6 @@ def _pipeline(img: np.ndarray) -> dict:
         for pt in pts:
             cv2.circle(lm_img, (int(pt[0][0]), int(pt[0][1])), 3, color, -1)
 
-    # 8. Color histogram — 9 channels across RGB, HSV, LAB
     hist_arr = _color_histogram(img, binary)
 
     return {
