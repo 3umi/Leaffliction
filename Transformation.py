@@ -4,8 +4,6 @@ import os
 import sys
 from typing import List
 
-import io
-
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -42,62 +40,31 @@ def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     ax.set_ylabel("Proportion of pixels (%)")
     ax.legend(fontsize=7, ncol=3)
     fig.tight_layout()
-    
+
     fig.canvas.draw()
     pixels = np.asarray(fig.canvas.buffer_rgba())
     plt.close(fig)
-    return cv2.cvtColor(pixels, cv2.COLOR_RGBA2BGR) 
+    return cv2.cvtColor(pixels, cv2.COLOR_RGBA2BGR)
+
+
+def _largest_blob(binary: np.ndarray) -> np.ndarray:
+    cnts, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL,
+                               cv2.CHAIN_APPROX_SIMPLE)
+    out = np.zeros_like(binary)
+    if cnts:
+        biggest = max(cnts, key=cv2.contourArea)
+        cv2.drawContours(out, [biggest], -1, 255, -1)
+    return out
+
 
 def _segment_leaf(img: np.ndarray) -> np.ndarray:
-    candidates = []
+    masks = []
     for channel, otype in (("a", "dark"), ("b", "light")):
         gray = pcv.rgb2gray_lab(rgb_img=img, channel=channel)
         gray = pcv.gaussian_blur(img=gray, ksize=(5, 5), sigma_x=0)
-        m = pcv.threshold.triangle(gray_img=gray, object_type=otype)
-        candidates.append(_isolate_leaf(m))
-
-    plausible = [c for c in candidates if 0.05 <= (c > 0).mean() <= 0.90]
-    if plausible:
-        return max(plausible, key=lambda c: (c > 0).sum())
-    return candidates[0]
-
-
-def _close_mask(binary: np.ndarray) -> np.ndarray:
-    """Fill small internal holes with morphological closing.
-
-    Overexposed leaves (Lighting augmentation) produce swiss-cheese masks
-    where veins and highlights get excluded, which fragments the ROI /
-    analyze / pseudolandmark panels. A small elliptical close bridges
-    those pixels while leaving larger disease-spot holes intact.
-    """
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-
-
-def _isolate_leaf(binary: np.ndarray) -> np.ndarray:
-    """Force the binary mask to represent the leaf only.
-
-    Triangle threshold can flip polarity on unusual color distributions,
-    producing a "picture frame" mask that hugs every border and leaves the
-    leaf as a hole. We invert only when the foreground clearly wraps the
-    frame — high border density AND high overall area — then keep only the
-    largest connected component so stray noise blobs don't leak in.
-    """
-    border = np.concatenate([
-        binary[0, :], binary[-1, :], binary[:, 0], binary[:, -1]
-    ])
-    border_density = (border > 0).mean()
-    fg_density = (binary > 0).mean()
-    # Only invert if the mask looks like it captured the background:
-    # borders are almost fully foreground AND the area is majority foreground.
-    if border_density > 0.9 and fg_density > 0.5:
-        binary = cv2.bitwise_not(binary)
-
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(binary, 8)
-    if n <= 1:
-        return binary
-    largest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
-    return np.where(labels == largest, 255, 0).astype(np.uint8)
+        masks.append(pcv.threshold.triangle(gray_img=gray,
+                                            object_type=otype))
+    return _largest_blob(cv2.bitwise_or(masks[0], masks[1]))
 
 
 def _pipeline(img: np.ndarray) -> dict:
@@ -105,7 +72,7 @@ def _pipeline(img: np.ndarray) -> dict:
     pcv.params.debug = None
     pcv.params.verbose = False
 
-    binary = _close_mask(_segment_leaf(img))
+    binary = _segment_leaf(img)
 
     gray_hsv = pcv.rgb2gray_hsv(rgb_img=img, channel="s")
     gray_hsv[binary == 0] = 0
@@ -156,10 +123,6 @@ def _pipeline(img: np.ndarray) -> dict:
         "Color histogram": hist_arr,
     }
 
-
-# ---------------------------------------------------------------------------
-# Display / save helpers
-# ---------------------------------------------------------------------------
 
 def _show(results: dict) -> None:
     image_keys = [k for k in results if k != "Color histogram"]
@@ -278,7 +241,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     if args.image and (args.src or args.dst):
         parser.error("Provide either a single image or -src/-dst, not both.")
     if args.image and any(getattr(args, f) for f in FLAG_TO_KEY):
-        parser.error("panel flags (-mask, -roi, ...) only work with -src/-dst.")
+        parser.error("panel flags (-mask, ...) only work with -src/-dst.")
     if bool(args.src) != bool(args.dst):
         parser.error("-src and -dst must be used together.")
     if not args.image and not args.src:
