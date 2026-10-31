@@ -48,11 +48,6 @@ def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     plt.close(fig)
     return cv2.cvtColor(pixels, cv2.COLOR_RGBA2BGR) 
 
-
-# ---------------------------------------------------------------------------
-# Mask post-processing
-# ---------------------------------------------------------------------------
-
 def _segment_leaf(img: np.ndarray) -> np.ndarray:
     """Segment the leaf from the background.
 
@@ -75,12 +70,6 @@ def _segment_leaf(img: np.ndarray) -> np.ndarray:
         m = pcv.threshold.triangle(gray_img=gray, object_type=otype)
         m = pcv.fill(bin_img=m, size=200)
         candidates.append(_isolate_leaf(m))
-
-    gray = pcv.rgb2gray_lab(rgb_img=img, channel="l")
-    gray = pcv.gaussian_blur(img=gray, ksize=(3, 3), sigma_x=0)
-    m = pcv.threshold.binary(gray_img=gray, threshold=253, object_type="dark")
-    m = pcv.fill(bin_img=m, size=100)
-    candidates.append(_isolate_leaf(m))
 
     plausible = [c for c in candidates if 0.05 <= (c > 0).mean() <= 0.90]
     if plausible:
