@@ -36,3 +36,4 @@ env/
 en.subject.pdf
 tests/
 *.zip
+validation_set.txt
