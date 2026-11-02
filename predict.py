@@ -18,7 +18,6 @@ from collections import Counter
 from typing import List, Tuple
 
 import cv2
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -27,7 +26,7 @@ from torch.utils.data import DataLoader
 
 from Distribution import class_label, discover_classes
 from model import LeafCNN, LeafDataset, preprocess
-from Transformation import _close_mask, _segment_leaf
+from Transformation import _segment_leaf
 from train import BATCH_SIZE, MODEL_PATH, SEED, _split_originals
 from utils.images import is_image, list_images
 
@@ -52,7 +51,7 @@ def _load_model(path: str, device: str) -> Tuple[LeafCNN, List[str]]:
 def _transformed(bgr: np.ndarray) -> np.ndarray:
     """Leaf isolated on a white background, as in Transformation's mask."""
     pcv.params.debug = None
-    mask = _close_mask(_segment_leaf(bgr))
+    mask = _segment_leaf(bgr)
     return pcv.apply_mask(img=bgr, mask=mask, mask_color="white")
 
 
@@ -69,13 +68,7 @@ def _show(rgb: np.ndarray, transformed: np.ndarray, label: str) -> None:
              color="white", ha="center", fontsize=16, weight="bold")
     fig.text(0.5, 0.07, f"Class predicted : {label}",
              color="limegreen", ha="center", fontsize=14)
-
-    backend = matplotlib.get_backend().lower()
-    if backend in {"agg", "cairo", "pdf", "pgf", "ps", "svg", "template"}:
-        fig.savefig("predict_result.png", facecolor="black")
-        print("No display available; saved figure to predict_result.png")
-    else:
-        plt.show()
+    plt.show()
 
 
 def predict_image(path: str, model_path: str) -> int:
