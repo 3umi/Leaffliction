@@ -18,6 +18,7 @@ from balance import copy_originals, generate_for_class
 from utils.images import list_images
 
 TRAIN_DIR = "train_directory"
+VAL_LIST = "validation_set.txt"
 SEED = 42
 BATCH_SIZE = 32
 EPOCHS = 30
@@ -178,6 +179,9 @@ def main(argv: list) -> int:
     if len(set(train_original_labels)) < 2:
         print("Error: training needs at least 2 classes.", file=sys.stderr)
         return 1
+
+    with open(VAL_LIST, "w") as f:
+        f.write("\n".join(X_val) + "\n")
 
     shutil.rmtree(TRAIN_DIR, ignore_errors=True)
 
