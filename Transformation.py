@@ -11,6 +11,8 @@ from plantcv import plantcv as pcv
 
 from utils.images import is_image, list_images
 
+MAX_MASK_COVERAGE = 0.8
+
 
 def _color_histogram(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     channels = [
@@ -64,7 +66,12 @@ def _segment_leaf(img: np.ndarray) -> np.ndarray:
         gray = pcv.gaussian_blur(img=gray, ksize=(5, 5), sigma_x=0)
         masks.append(pcv.threshold.triangle(gray_img=gray,
                                             object_type=otype))
-    return _largest_blob(cv2.bitwise_or(masks[0], masks[1]))
+    # A threshold that flipped onto the background covers most of the
+    # frame; leave it out so the leaf isn't merged with the background.
+    kept = [m for m in masks if (m > 0).mean() < MAX_MASK_COVERAGE]
+    if not kept:
+        kept = [min(masks, key=lambda m: (m > 0).mean())]
+    return _largest_blob(np.bitwise_or.reduce(kept))
 
 
 def _pipeline(img: np.ndarray) -> dict:
